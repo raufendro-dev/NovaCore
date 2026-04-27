@@ -2,23 +2,32 @@ package generator
 
 const modelTpl = `package {{.Snake}}
 
-import "gorm.io/gorm"
+import (
+{{if .NeedsTime}}	"time"
+{{end}}	"gorm.io/gorm"
+)
 
 type {{.Name}} struct {
 	gorm.Model
-	Name string ` + "`json:\"name\" gorm:\"size:120;not null\"`" + `
-}
+{{range .Fields}}	{{.GoName}} {{.GoType}} ` + "`json:\"{{.JSONName}}\" gorm:\"{{.GormTag}}\"`" + `
+{{end}}}
 `
 
 const dtoTpl = `package {{.Snake}}
 
+{{if .NeedsTime}}
+import (
+	"time"
+)
+{{end}}
+
 type Create{{.Name}}Request struct {
-	Name string ` + "`json:\"name\" validate:\"required,min=2,max=120\"`" + `
-}
+{{range .Fields}}	{{.GoName}} {{.GoType}} ` + "`json:\"{{.JSONName}}\" validate:\"{{.ValidateCreate}}\"`" + `
+{{end}}}
 
 type Update{{.Name}}Request struct {
-	Name string ` + "`json:\"name\" validate:\"omitempty,min=2,max=120\"`" + `
-}
+{{range .Fields}}	{{.GoName}} *{{.GoType}} ` + "`json:\"{{.JSONName}}\" validate:\"{{.ValidateUpdate}}\"`" + `
+{{end}}}
 `
 
 const repositoryTpl = `package {{.Snake}}
@@ -73,7 +82,9 @@ func (s *Service) List() ([]{{.Name}}, error) { return s.repo.FindAll() }
 func (s *Service) Get(id uint) (*{{.Name}}, error) { return s.repo.FindByID(id) }
 
 func (s *Service) Create(req Create{{.Name}}Request) (*{{.Name}}, error) {
-	model := &{{.Name}}{Name: req.Name}
+	model := &{{.Name}}{
+{{range .Fields}}		{{.GoName}}: req.{{.GoName}},
+{{end}}	}
 	return model, s.repo.Create(model)
 }
 
@@ -82,10 +93,10 @@ func (s *Service) Update(id uint, req Update{{.Name}}Request) (*{{.Name}}, error
 	if err != nil || model == nil {
 		return nil, errors.New("{{.Lower}} not found")
 	}
-	if req.Name != "" {
-		model.Name = req.Name
+{{range .Fields}}	if req.{{.GoName}} != nil {
+		model.{{.GoName}} = *req.{{.GoName}}
 	}
-	return model, s.repo.Update(model)
+{{end}}	return model, s.repo.Update(model)
 }
 
 func (s *Service) Delete(id uint) error {
@@ -229,7 +240,10 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, jwt *security.JWTManag
 
 const testTpl = `package {{.Snake}}
 
-import "testing"
+import (
+	"testing"
+{{if .NeedsTime}}	"time"
+{{end}})
 
 type fakeRepo struct{ rows []{{.Name}} }
 
@@ -252,12 +266,17 @@ func (f *fakeRepo) Delete(model *{{.Name}}) error { return nil }
 
 func TestServiceCreate(t *testing.T) {
 	service := NewService(&fakeRepo{})
-	row, err := service.Create(Create{{.Name}}Request{Name: "Example"})
+	row, err := service.Create(Create{{.Name}}Request{
+{{range .Fields}}		{{.GoName}}: {{.Example}},
+{{end}}	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if row.Name != "Example" {
-		t.Fatalf("expected Example, got %s", row.Name)
+{{if .FirstField}}	if row.{{.FirstField.GoName}} == {{.FirstField.ZeroValue}} {
+		t.Fatal("expected {{.FirstField.GoName}} to be set")
 	}
-}
+{{else}}	if row.ID != 1 {
+		t.Fatalf("expected generated ID, got %d", row.ID)
+	}
+{{end}}}
 `

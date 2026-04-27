@@ -16,6 +16,22 @@ go run cmd/framework/main.go make:seeder create_admin_user
 
 `make:crud` membuat model, DTO, repository, service, handler, routes, migration, test, docs endpoint, dan Postman request.
 
+Saat menjalankan `make:crud`, CLI akan menanyakan field yang ingin disimpan. Field default `id`, `created_at`, `updated_at`, dan `deleted_at` sudah disediakan otomatis oleh `gorm.Model`.
+
+Contoh:
+
+```text
+Field name: name
+Type [string]: string
+Required? [y/N]: y
+Field name: price
+Type [string]: float
+Required? [y/N]: n
+Field name:
+```
+
+Tipe yang didukung: `string`, `text`, `int`, `uint`, `float`, `bool`, `time`.
+
 CRUD generated otomatis protected dengan JWT middleware. Login terlebih dahulu lewat `/api/v1/auth/login`, lalu kirim header:
 
 ```http

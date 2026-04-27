@@ -20,10 +20,30 @@ type View struct {
 	Plural     string
 	PluralPath string
 	Public     bool
+	Fields     []Field
+	NeedsTime  bool
+	FirstField *Field
 }
 
 type Options struct {
 	Public bool
+	Fields []Field
+}
+
+type Field struct {
+	Name           string
+	GoName         string
+	JSONName       string
+	SnakeName      string
+	GoType         string
+	SQLType        string
+	GormTag        string
+	ValidateCreate string
+	ValidateUpdate string
+	Example        string
+	JSONExample    string
+	ZeroValue      string
+	Required       bool
 }
 
 func Generate(kind, name string) error {
@@ -33,6 +53,11 @@ func Generate(kind, name string) error {
 func GenerateWithOptions(kind, name string, opts Options) error {
 	v := makeView(name)
 	v.Public = opts.Public
+	v.Fields = normalizeFields(opts.Fields)
+	v.NeedsTime = needsTime(v.Fields)
+	if len(v.Fields) > 0 {
+		v.FirstField = &v.Fields[0]
+	}
 	if kind == "crud" || kind == "module" {
 		if err := os.MkdirAll(moduleDir(v), 0o755); err != nil {
 			return err
@@ -51,7 +76,7 @@ func GenerateWithOptions(kind, name string, opts Options) error {
 				return err
 			}
 		}
-		if err := GenerateMigration("create_" + v.Plural + "_table"); err != nil {
+		if err := GenerateMigrationForView(v); err != nil {
 			return err
 		}
 		if err := updateRouteRegistry(v); err != nil {
@@ -82,6 +107,20 @@ func GenerateMigration(name string) error {
 		up = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n  id INTEGER PRIMARY KEY,\n  name VARCHAR(120) NOT NULL,\n  created_at TIMESTAMP,\n  updated_at TIMESTAMP,\n  deleted_at TIMESTAMP\n);\n", table)
 		down = fmt.Sprintf("DROP TABLE IF EXISTS %s;\n", table)
 	}
+	if err := os.WriteFile(base+".up.sql", []byte(up), 0o644); err != nil {
+		return err
+	}
+	return os.WriteFile(base+".down.sql", []byte(down), 0o644)
+}
+
+func GenerateMigrationForView(v View) error {
+	if err := os.MkdirAll("migrations", 0o755); err != nil {
+		return err
+	}
+	stamp := time.Now().UTC().Format("20060102150405")
+	base := filepath.Join("migrations", stamp+"_create_"+v.Plural+"_table")
+	up := buildCreateTableSQL(v)
+	down := fmt.Sprintf("DROP TABLE IF EXISTS %s;\n", v.Plural)
 	if err := os.WriteFile(base+".up.sql", []byte(up), 0o644); err != nil {
 		return err
 	}
@@ -121,6 +160,113 @@ func makeView(name string) View {
 	snake := toSnake(clean)
 	plural := pluralize(snake)
 	return View{Name: clean, Lower: strings.ToLower(clean[:1]) + clean[1:], Snake: snake, Kebab: strings.ReplaceAll(snake, "_", "-"), Plural: plural, PluralPath: strings.ReplaceAll(plural, "_", "-")}
+}
+
+func NewField(name, dataType string, required bool) (Field, error) {
+	snake := toSnake(strings.TrimSpace(name))
+	if snake == "" {
+		return Field{}, fmt.Errorf("field name is required")
+	}
+	goType, sqlType, example, jsonExample, zeroValue, err := mapFieldType(dataType)
+	if err != nil {
+		return Field{}, err
+	}
+	field := Field{
+		Name:           snake,
+		GoName:         toPascal(snake),
+		JSONName:       snake,
+		SnakeName:      snake,
+		GoType:         goType,
+		SQLType:        sqlType,
+		ValidateCreate: "omitempty",
+		ValidateUpdate: "omitempty",
+		Example:        example,
+		JSONExample:    jsonExample,
+		ZeroValue:      zeroValue,
+		Required:       required,
+	}
+	if required {
+		field.ValidateCreate = "required"
+		field.GormTag = "not null"
+	}
+	if goType == "string" && required {
+		field.ValidateCreate = "required,min=1"
+	}
+	return field, nil
+}
+
+func normalizeFields(fields []Field) []Field {
+	out := make([]Field, 0, len(fields))
+	for _, field := range fields {
+		if field.SQLType != "" {
+			out = append(out, field)
+			continue
+		}
+		normalized, err := NewField(field.Name, field.GoType, field.Required)
+		if err == nil {
+			out = append(out, normalized)
+		}
+	}
+	return out
+}
+
+func mapFieldType(dataType string) (string, string, string, string, string, error) {
+	switch strings.ToLower(strings.TrimSpace(dataType)) {
+	case "string", "":
+		return "string", "VARCHAR(255)", `"Example"`, `"Example"`, `""`, nil
+	case "text":
+		return "string", "TEXT", `"Long text"`, `"Long text"`, `""`, nil
+	case "int", "integer":
+		return "int", "INTEGER", "100", "100", "0", nil
+	case "uint":
+		return "uint", "INTEGER", "100", "100", "0", nil
+	case "float", "decimal", "double":
+		return "float64", "DECIMAL(12,2)", "99.5", "99.5", "0", nil
+	case "bool", "boolean":
+		return "bool", "BOOLEAN", "true", "true", "false", nil
+	case "time", "datetime", "timestamp":
+		return "time.Time", "TIMESTAMP", `time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC)`, `"2026-04-27T00:00:00Z"`, "time.Time{}", nil
+	default:
+		return "", "", "", "", "", fmt.Errorf("unsupported field type %q", dataType)
+	}
+}
+
+func needsTime(fields []Field) bool {
+	for _, field := range fields {
+		if field.GoType == "time.Time" {
+			return true
+		}
+	}
+	return false
+}
+
+func toPascal(value string) string {
+	parts := strings.Split(toSnake(value), "_")
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	return strings.Join(parts, "")
+}
+
+func buildCreateTableSQL(v View) string {
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n", v.Plural))
+	builder.WriteString("  id INTEGER PRIMARY KEY,\n")
+	for _, field := range v.Fields {
+		nullable := ""
+		if field.Required {
+			nullable = " NOT NULL"
+		}
+		builder.WriteString(fmt.Sprintf("  %s %s%s,\n", field.SnakeName, field.SQLType, nullable))
+	}
+	builder.WriteString("  created_at TIMESTAMP,\n")
+	builder.WriteString("  updated_at TIMESTAMP,\n")
+	builder.WriteString("  deleted_at TIMESTAMP\n")
+	builder.WriteString(");\n")
+	return builder.String()
 }
 
 func toSnake(value string) string {
@@ -195,8 +341,20 @@ func generatedModules() ([]string, error) {
 
 func writeEndpointDoc(v View) error {
 	path := filepath.Join("docs", "endpoints_"+v.Snake+".md")
-	body := fmt.Sprintf("# %s Endpoints\n\nBase path: `/api/v1/%s`\n\n- `GET /api/v1/%s`\n- `GET /api/v1/%s/:id`\n- `POST /api/v1/%s`\n- `PUT /api/v1/%s/:id`\n- `PATCH /api/v1/%s/:id`\n- `DELETE /api/v1/%s/:id`\n", v.Name, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath)
+	body := fmt.Sprintf("# %s Endpoints\n\nBase path: `/api/v1/%s`\n\n- `GET /api/v1/%s`\n- `GET /api/v1/%s/:id`\n- `POST /api/v1/%s`\n- `PUT /api/v1/%s/:id`\n- `PATCH /api/v1/%s/:id`\n- `DELETE /api/v1/%s/:id`\n\n## Fields\n\n%s", v.Name, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, fieldDocs(v))
 	return os.WriteFile(path, []byte(body), 0o644)
+}
+
+func fieldDocs(v View) string {
+	if len(v.Fields) == 0 {
+		return "This module has no custom fields beyond `id`, `created_at`, `updated_at`, and `deleted_at`.\n"
+	}
+	var builder strings.Builder
+	builder.WriteString("| Field | Type | Required |\n| --- | --- | --- |\n")
+	for _, field := range v.Fields {
+		builder.WriteString(fmt.Sprintf("| `%s` | `%s` | `%t` |\n", field.JSONName, field.GoType, field.Required))
+	}
+	return builder.String()
 }
 
 func writeModel(v View) error {
@@ -264,10 +422,21 @@ func moduleFolder(v View) map[string]any {
 				"method": method,
 				"header": []any{map[string]any{"key": "Authorization", "value": "Bearer {{token}}"}, map[string]any{"key": "Content-Type", "value": "application/json"}},
 				"url":    map[string]any{"raw": "{{base_url}}/" + paths[i], "host": []string{"{{base_url}}"}, "path": strings.Split(paths[i], "/")},
-				"body":   map[string]any{"mode": "raw", "raw": `{"name":"Example"}`},
+				"body":   map[string]any{"mode": "raw", "raw": bodyExample(v)},
 			},
 			"response": []any{map[string]any{"name": "Success", "body": `{"success":true,"message":"OK","data":{}}`}},
 		})
 	}
 	return map[string]any{"name": v.Name, "item": items}
+}
+
+func bodyExample(v View) string {
+	if len(v.Fields) == 0 {
+		return `{}`
+	}
+	parts := make([]string, 0, len(v.Fields))
+	for _, field := range v.Fields {
+		parts = append(parts, fmt.Sprintf(`"%s":%s`, field.JSONName, field.JSONExample))
+	}
+	return "{" + strings.Join(parts, ",") + "}"
 }

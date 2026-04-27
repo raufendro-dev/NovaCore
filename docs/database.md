@@ -65,6 +65,8 @@ go run cmd/framework/main.go migrate
 
 File `.up.sql` dijalankan saat migration. NovaCore mencatat file yang sudah dijalankan di tabel `schema_migrations`.
 
+Untuk CRUD generated, kolom migration mengikuti field yang kamu isi saat prompt `make:crud`.
+
 ## Seeder
 
 Seeder adalah file SQL untuk mengisi data awal seperti admin pertama, role default, permission default, atau data referensi.

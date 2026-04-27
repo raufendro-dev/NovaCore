@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/raufendro/novacore/internal/config"
 	"github.com/raufendro/novacore/internal/database"
@@ -71,7 +73,11 @@ func colonMakeCommands() []*cobra.Command {
 			Short: "Generate " + kind,
 			Args:  cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				return generator.GenerateWithOptions(kind, args[0], generator.Options{Public: public})
+				fields, err := promptFields(cmd, kind)
+				if err != nil {
+					return err
+				}
+				return generator.GenerateWithOptions(kind, args[0], generator.Options{Public: public, Fields: fields})
 			},
 		}
 		if kind == "crud" || kind == "module" || kind == "endpoint" {
@@ -107,7 +113,11 @@ func makeCommand() *cobra.Command {
 			Short: "Generate " + kind,
 			Args:  cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				return generator.GenerateWithOptions(kind, args[0], generator.Options{Public: public})
+				fields, err := promptFields(cmd, kind)
+				if err != nil {
+					return err
+				}
+				return generator.GenerateWithOptions(kind, args[0], generator.Options{Public: public, Fields: fields})
 			},
 		}
 		if kind == "crud" || kind == "module" || kind == "endpoint" {
@@ -139,4 +149,79 @@ func makeCommand() *cobra.Command {
 		},
 	})
 	return make
+}
+
+func promptFields(cmd *cobra.Command, kind string) ([]generator.Field, error) {
+	if kind != "crud" && kind != "module" {
+		return nil, nil
+	}
+	reader := bufio.NewReader(cmd.InOrStdin())
+	fmt.Fprintln(cmd.OutOrStdout(), "Define fields for this CRUD. Default fields are already included: id, created_at, updated_at, deleted_at.")
+	fmt.Fprintln(cmd.OutOrStdout(), "Supported types: string, text, int, uint, float, bool, time.")
+	fmt.Fprintln(cmd.OutOrStdout(), "Press Enter on field name when finished.")
+
+	fields := []generator.Field{}
+	reserved := map[string]struct{}{"id": {}, "created_at": {}, "updated_at": {}, "deleted_at": {}}
+	for {
+		name, err := ask(reader, cmd, "Field name")
+		if err != nil {
+			return nil, err
+		}
+		name = strings.TrimSpace(name)
+		if name == "" {
+			break
+		}
+		snake := toSnakeName(name)
+		if _, ok := reserved[snake]; ok {
+			fmt.Fprintf(cmd.OutOrStdout(), "%s is already included by default.\n", snake)
+			continue
+		}
+		dataType, err := ask(reader, cmd, "Type [string]")
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(dataType) == "" {
+			dataType = "string"
+		}
+		requiredInput, err := ask(reader, cmd, "Required? [y/N]")
+		if err != nil {
+			return nil, err
+		}
+		required := strings.EqualFold(strings.TrimSpace(requiredInput), "y") || strings.EqualFold(strings.TrimSpace(requiredInput), "yes")
+		field, err := generator.NewField(name, dataType, required)
+		if err != nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "Invalid field: %v\n", err)
+			continue
+		}
+		fields = append(fields, field)
+	}
+	return fields, nil
+}
+
+func ask(reader *bufio.Reader, cmd *cobra.Command, label string) (string, error) {
+	fmt.Fprintf(cmd.OutOrStdout(), "%s: ", label)
+	value, err := reader.ReadString('\n')
+	if err != nil && len(value) == 0 {
+		return "", err
+	}
+	return strings.TrimSpace(value), nil
+}
+
+func toSnakeName(value string) string {
+	value = strings.TrimSpace(value)
+	var builder strings.Builder
+	for i, r := range value {
+		if r >= 'A' && r <= 'Z' {
+			if i > 0 {
+				builder.WriteByte('_')
+			}
+			r += 'a' - 'A'
+		}
+		if r == '-' || r == ' ' {
+			builder.WriteByte('_')
+			continue
+		}
+		builder.WriteRune(r)
+	}
+	return builder.String()
 }
