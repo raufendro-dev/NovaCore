@@ -88,6 +88,16 @@ func GenerateMigration(name string) error {
 	return os.WriteFile(base+".down.sql", []byte(down), 0o644)
 }
 
+func GenerateSeeder(name string) error {
+	if err := os.MkdirAll("seeders", 0o755); err != nil {
+		return err
+	}
+	stamp := time.Now().UTC().Format("20060102150405")
+	path := filepath.Join("seeders", stamp+"_"+toSnake(name)+".sql")
+	body := "-- Write idempotent seed SQL here.\n"
+	return os.WriteFile(path, []byte(body), 0o644)
+}
+
 func writeTemplate(path, body string, v View) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

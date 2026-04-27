@@ -8,6 +8,7 @@ import (
 	"github.com/raufendro/novacore/internal/database"
 	"github.com/raufendro/novacore/internal/generator"
 	"github.com/raufendro/novacore/internal/migration"
+	"github.com/raufendro/novacore/internal/seeder"
 	"github.com/spf13/cobra"
 )
 
@@ -34,8 +35,15 @@ func main() {
 		Use:   "seed",
 		Short: "Run seeders",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Seeder support is ready. Add SQL files to seeders/ and run them from your deployment workflow.")
-			return nil
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			conn, err := database.Connect(cfg)
+			if err != nil {
+				return err
+			}
+			return seeder.Run(conn.SQL, "seeders")
 		},
 	})
 	if err := root.Execute(); err != nil {
@@ -79,6 +87,14 @@ func colonMakeCommands() []*cobra.Command {
 			return generator.GenerateMigration(args[0])
 		},
 	})
+	commands = append(commands, &cobra.Command{
+		Use:   "make:seeder [name]",
+		Short: "Generate SQL seeder",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return generator.GenerateSeeder(args[0])
+		},
+	})
 	return commands
 }
 
@@ -112,6 +128,14 @@ func makeCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return generator.GenerateMigration(args[0])
+		},
+	})
+	make.AddCommand(&cobra.Command{
+		Use:   "seeder [name]",
+		Short: "Generate SQL seeder",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return generator.GenerateSeeder(args[0])
 		},
 	})
 	return make

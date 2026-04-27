@@ -12,3 +12,9 @@ Variabel utama:
 - `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW`
 
 Default lokal menggunakan SQLite di `database/app.db` agar server langsung bisa dijalankan.
+
+Saat memakai SQL database, tabel auth `users` dibuat otomatis ketika server start. Pastikan `.env` sudah menunjuk ke database yang benar sebelum menjalankan:
+
+```bash
+go run cmd/server/main.go
+```

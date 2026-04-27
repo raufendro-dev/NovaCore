@@ -82,6 +82,14 @@ Jangan gunakan `JWT_SECRET` default untuk production.
 
 Auth endpoint sudah built-in, jadi tidak perlu digenerate.
 
+Untuk database SQL (`sqlite`, `mysql`, `postgres`), tabel `users` auth otomatis dibuat saat server start:
+
+```bash
+go run cmd/server/main.go
+```
+
+NovaCore menjalankan GORM `AutoMigrate` untuk model auth bawaan. Jadi setelah clone, `cp .env.example .env`, dan start server, tabel user auth sudah siap dipakai. Untuk production schema aplikasi, tetap disarankan memakai migration agar perubahan database tercatat.
+
 | Method | Endpoint | Keterangan |
 | --- | --- | --- |
 | POST | `/api/v1/auth/register` | Membuat user baru |
@@ -233,11 +241,24 @@ REDIS_DB=0
 
 ## Migration dan Seeder
 
+Migration dipakai untuk mengubah struktur database secara terkontrol, misalnya membuat tabel, menambah kolom, membuat index, atau mengubah tipe data. File migration disimpan di `migrations/`.
+
+Seeder dipakai untuk mengisi data awal, misalnya admin pertama, role default, permission default, atau data referensi. File seeder disimpan di `seeders/`.
+
 Buat migration:
 
 ```bash
 go run cmd/framework/main.go make:migration create_products_table
 ```
+
+Command ini membuat file:
+
+```text
+migrations/<timestamp>_create_products_table.up.sql
+migrations/<timestamp>_create_products_table.down.sql
+```
+
+Isi file `.up.sql` dengan SQL untuk menerapkan perubahan. Isi file `.down.sql` dengan SQL rollback sebagai dokumentasi rollback.
 
 Jalankan migration:
 
@@ -245,11 +266,23 @@ Jalankan migration:
 go run cmd/framework/main.go migrate
 ```
 
-Seeder:
+NovaCore mencatat migration yang sudah jalan di tabel `schema_migrations`, jadi file `.up.sql` yang sama tidak dijalankan berulang.
+
+Buat seeder:
+
+```bash
+go run cmd/framework/main.go make:seeder create_admin_user
+```
+
+Isi file `seeders/<timestamp>_create_admin_user.sql` dengan SQL data awal. Seeder sebaiknya idempotent, misalnya memakai `INSERT ... ON CONFLICT`, `INSERT IGNORE`, atau pola SQL sejenis sesuai database.
+
+Jalankan seeder:
 
 ```bash
 go run cmd/framework/main.go seed
 ```
+
+NovaCore mencatat seeder yang sudah jalan di tabel `seed_history`, jadi file seeder yang sama tidak dijalankan berulang.
 
 ## Postman
 

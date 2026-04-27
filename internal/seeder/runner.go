@@ -1,4 +1,4 @@
-package migration
+package seeder
 
 import (
 	"os"
@@ -12,7 +12,7 @@ func Run(db *gorm.DB, dir string) error {
 	if db == nil {
 		return nil
 	}
-	files, err := filepath.Glob(filepath.Join(dir, "*.up.sql"))
+	files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
 	if err != nil {
 		return err
 	}
@@ -21,13 +21,13 @@ func Run(db *gorm.DB, dir string) error {
 	if err != nil {
 		return err
 	}
-	if err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version VARCHAR(255) PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).Error; err != nil {
+	if err := db.Exec(`CREATE TABLE IF NOT EXISTS seed_history (name VARCHAR(255) PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).Error; err != nil {
 		return err
 	}
 	for _, file := range files {
-		version := filepath.Base(file)
+		name := filepath.Base(file)
 		var count int64
-		if err := db.Raw("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", version).Scan(&count).Error; err != nil {
+		if err := db.Raw("SELECT COUNT(*) FROM seed_history WHERE name = ?", name).Scan(&count).Error; err != nil {
 			return err
 		}
 		if count > 0 {
@@ -40,7 +40,7 @@ func Run(db *gorm.DB, dir string) error {
 		if _, err := sqlDB.Exec(string(content)); err != nil {
 			return err
 		}
-		if err := db.Exec("INSERT INTO schema_migrations (version) VALUES (?)", version).Error; err != nil {
+		if err := db.Exec("INSERT INTO seed_history (name) VALUES (?)", name).Error; err != nil {
 			return err
 		}
 	}

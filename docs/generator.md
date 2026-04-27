@@ -10,6 +10,8 @@ go run cmd/framework/main.go make:service Product
 go run cmd/framework/main.go make:repository Product
 go run cmd/framework/main.go make:endpoint Product
 go run cmd/framework/main.go make:crud Product
+go run cmd/framework/main.go make:migration create_products_table
+go run cmd/framework/main.go make:seeder create_admin_user
 ```
 
 `make:crud` membuat model, DTO, repository, service, handler, routes, migration, test, docs endpoint, dan Postman request.
