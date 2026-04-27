@@ -1,0 +1,6 @@
+.env
+.cache/
+bin/
+database/*.db
+coverage.out
+tmp/
