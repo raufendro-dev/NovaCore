@@ -387,16 +387,6 @@ Production checklist:
 - Batasi CORS origin
 - Jalankan aplikasi di balik reverse proxy atau container orchestrator
 
-## Publish ke GitHub
-
-```bash
-git init
-git add .
-git commit -m "Initial release of NovaCore"
-git branch -M main
-git remote add origin <github-repo-url>
-git push -u origin main
-```
 
 ## License
 
