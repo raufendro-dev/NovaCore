@@ -68,7 +68,7 @@ Membuat project baru dari mana saja:
 
 ```bash
 novacore create nama-project
-cd api-umkm
+cd nama-project
 go mod tidy
 novacore run
 ```
@@ -207,7 +207,7 @@ Contoh:
 
 ```bash
 novacore create nama-project
-cd api-umkm
+cd nama-project
 go mod tidy
 novacore run
 ```
@@ -217,13 +217,13 @@ Command ini bisa dijalankan dari direktori mana pun. NovaCore akan mencari sourc
 Secara default module Go diambil dari nama folder project. Contoh `novacore create nama-project` menghasilkan:
 
 ```go
-module api-umkm
+module nama-project
 ```
 
 Jika ingin memakai module path sendiri:
 
 ```bash
-novacore create nama-project --module github.com/raufendro/api-umkm
+novacore create nama-project --module github.com/raufendro/nama-project
 ```
 
 Yang dilakukan oleh `create`:
