@@ -70,6 +70,7 @@ APP_DEBUG=true
 
 DB_DRIVER=sqlite
 DB_SQLITE_PATH=database/app.db
+DB_AUTO_CREATE=false
 
 JWT_SECRET=change_this_secret
 JWT_ACCESS_EXPIRY=15m
@@ -208,6 +209,7 @@ DB_PORT=3306
 DB_NAME=app_db
 DB_USER=root
 DB_PASSWORD=password
+DB_AUTO_CREATE=true
 ```
 
 PostgreSQL:
@@ -220,6 +222,7 @@ DB_NAME=app_db
 DB_USER=postgres
 DB_PASSWORD=password
 DB_SSL_MODE=disable
+DB_AUTO_CREATE=true
 ```
 
 MongoDB:
@@ -238,6 +241,20 @@ REDIS_ADDR=localhost:6379
 REDIS_PASSWORD=
 REDIS_DB=0
 ```
+
+Jika muncul error seperti `Unknown database 'app_db'`, artinya MySQL/PostgreSQL server bisa diakses tetapi database `app_db` belum dibuat. Pilih salah satu:
+
+```sql
+CREATE DATABASE app_db;
+```
+
+atau aktifkan auto-create untuk development:
+
+```env
+DB_AUTO_CREATE=true
+```
+
+Untuk production, lebih aman buat database lewat provisioning/deployment pipeline dan biarkan `DB_AUTO_CREATE=false`.
 
 ## Migration dan Seeder
 

@@ -8,6 +8,30 @@ SQL yang didukung:
 - `mysql`
 - `postgres`
 
+Jika memakai MySQL/PostgreSQL, database harus sudah ada sebelum aplikasi connect, kecuali `DB_AUTO_CREATE=true` diaktifkan.
+
+Contoh error:
+
+```text
+Error 1049 (42000): Unknown database 'app_db'
+```
+
+Artinya server MySQL hidup, user/password benar, tetapi database `app_db` belum dibuat.
+
+Solusi manual:
+
+```sql
+CREATE DATABASE app_db;
+```
+
+Solusi development:
+
+```env
+DB_AUTO_CREATE=true
+```
+
+Untuk production, gunakan `DB_AUTO_CREATE=false` dan buat database melalui provisioning/deployment pipeline.
+
 MongoDB didukung dengan:
 
 ```env

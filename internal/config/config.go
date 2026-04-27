@@ -34,6 +34,7 @@ type DatabaseConfig struct {
 	Password   string
 	SSLMode    string
 	SQLitePath string
+	AutoCreate bool
 }
 
 type MongoConfig struct {
@@ -86,6 +87,7 @@ func Load() (*Config, error) {
 			Password:   viper.GetString("DB_PASSWORD"),
 			SSLMode:    viper.GetString("DB_SSL_MODE"),
 			SQLitePath: viper.GetString("DB_SQLITE_PATH"),
+			AutoCreate: viper.GetBool("DB_AUTO_CREATE"),
 		},
 		Mongo: MongoConfig{URI: viper.GetString("MONGO_URI"), Database: viper.GetString("MONGO_DATABASE")},
 		Redis: RedisConfig{
@@ -114,6 +116,7 @@ func setDefaults() {
 	viper.SetDefault("DB_DRIVER", "sqlite")
 	viper.SetDefault("DB_SQLITE_PATH", "database/app.db")
 	viper.SetDefault("DB_SSL_MODE", "disable")
+	viper.SetDefault("DB_AUTO_CREATE", false)
 	viper.SetDefault("MONGO_URI", "mongodb://localhost:27017")
 	viper.SetDefault("MONGO_DATABASE", "app_db")
 	viper.SetDefault("JWT_SECRET", "change_this_secret")
