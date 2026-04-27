@@ -3,7 +3,7 @@
 Command:
 
 ```bash
-novacore create api-umkm
+novacore create nama-project
 novacore make:module User
 novacore make:model Product
 novacore make:controller Product

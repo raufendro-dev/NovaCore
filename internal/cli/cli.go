@@ -388,7 +388,6 @@ func createCommand() *cobra.Command {
 			fmt.Fprintln(out, "Next steps:")
 			fmt.Fprintf(out, "  cd %s\n", projectName)
 			fmt.Fprintln(out, "  go mod tidy")
-			fmt.Fprintln(out, "  novacore setup")
 			fmt.Fprintln(out, "  novacore run")
 			return nil
 		},

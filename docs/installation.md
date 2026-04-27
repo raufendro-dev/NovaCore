@@ -13,17 +13,16 @@ novacore run
 Buat project baru dari direktori mana pun:
 
 ```bash
-novacore create api-umkm
+novacore create nama-project
 cd api-umkm
 go mod tidy
-novacore setup
 novacore run
 ```
 
 Gunakan module path custom jika project akan dipublish ke repository sendiri:
 
 ```bash
-novacore create api-umkm --module github.com/raufendro/api-umkm
+novacore create nama-project --module github.com/raufendro/api-umkm
 ```
 
 Jika `novacore` belum terbaca oleh shell:

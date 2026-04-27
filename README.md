@@ -67,10 +67,9 @@ NovaCore memakai library yang stabil dan umum dipakai di ekosistem Go:
 Membuat project baru dari mana saja:
 
 ```bash
-novacore create api-umkm
+novacore create nama-project
 cd api-umkm
 go mod tidy
-novacore setup
 novacore run
 ```
 
@@ -207,16 +206,15 @@ novacore create nama-project
 Contoh:
 
 ```bash
-novacore create api-umkm
+novacore create nama-project
 cd api-umkm
 go mod tidy
-novacore setup
 novacore run
 ```
 
 Command ini bisa dijalankan dari direktori mana pun. NovaCore akan mencari source template dari `NOVACORE_HOME` atau folder clone NovaCore yang terdeteksi otomatis.
 
-Secara default module Go diambil dari nama folder project. Contoh `novacore create api-umkm` menghasilkan:
+Secara default module Go diambil dari nama folder project. Contoh `novacore create nama-project` menghasilkan:
 
 ```go
 module api-umkm
@@ -225,7 +223,7 @@ module api-umkm
 Jika ingin memakai module path sendiri:
 
 ```bash
-novacore create api-umkm --module github.com/raufendro/api-umkm
+novacore create nama-project --module github.com/raufendro/api-umkm
 ```
 
 Yang dilakukan oleh `create`:
@@ -240,7 +238,7 @@ Yang dilakukan oleh `create`:
 
 | Command | Fungsi |
 | --- | --- |
-| `novacore create api-umkm` | Membuat project backend baru dari template NovaCore |
+| `novacore create nama-project` | Membuat project backend baru dari template NovaCore |
 | `novacore run` | Menjalankan HTTP server |
 | `novacore setup` | Set `NOVACORE_HOME` dari `pwd` dan menambahkan Go bin ke `PATH` |
 | `novacore version` | Menampilkan versi, author, repository, dan license |
