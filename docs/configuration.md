@@ -19,5 +19,5 @@ Default lokal menggunakan SQLite di `database/app.db` agar server langsung bisa 
 Saat memakai SQL database, tabel auth `users` dibuat otomatis ketika server start. Pastikan `.env` sudah menunjuk ke database yang benar sebelum menjalankan:
 
 ```bash
-go run cmd/server/main.go
+novacore run
 ```

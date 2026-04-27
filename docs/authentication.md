@@ -30,5 +30,5 @@ group := router.Group("/products", middleware.Auth(jwt), middleware.Role("admin"
 Untuk generated CRUD yang memang harus publik, gunakan:
 
 ```bash
-go run cmd/framework/main.go make:crud Article --public
+novacore make:crud Article --public
 ```

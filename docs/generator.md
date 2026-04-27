@@ -3,15 +3,15 @@
 Command:
 
 ```bash
-go run cmd/framework/main.go make:module User
-go run cmd/framework/main.go make:model Product
-go run cmd/framework/main.go make:controller Product
-go run cmd/framework/main.go make:service Product
-go run cmd/framework/main.go make:repository Product
-go run cmd/framework/main.go make:endpoint Product
-go run cmd/framework/main.go make:crud Product
-go run cmd/framework/main.go make:migration create_products_table
-go run cmd/framework/main.go make:seeder create_admin_user
+novacore make:module User
+novacore make:model Product
+novacore make:controller Product
+novacore make:service Product
+novacore make:repository Product
+novacore make:endpoint Product
+novacore make:crud Product
+novacore make:migration create_products_table
+novacore make:seeder create_admin_user
 ```
 
 `make:crud` membuat model, DTO, repository, service, handler, routes, migration, test, docs endpoint, dan Postman request.
@@ -25,9 +25,11 @@ Methods [GET, POST, PUT, PATCH, DELETE]: POST, GET, DELETE
 Field name: name
 Type [string]: string
 Required? [y/N]: y
+Default value [none]:
 Field name: price
 Type [string]: float
 Required? [y/N]: n
+Default value [none]: 0
 Field name: <Ctrl+D>
 ```
 
@@ -46,7 +48,7 @@ Authorization: Bearer <access_token>
 Untuk CRUD publik, tambahkan flag:
 
 ```bash
-go run cmd/framework/main.go make:crud Article --public
+novacore make:crud Article --public
 ```
 
 Flag `--public` juga tersedia untuk `make:module` dan `make:endpoint`.
@@ -56,13 +58,20 @@ Flag `--public` juga tersedia untuk `make:module` dan `make:endpoint`.
 Jika ada field atau tipe data yang terlewat setelah CRUD dibuat, gunakan:
 
 ```bash
-go run cmd/framework/main.go update:crud Product
+novacore update:crud Product
+```
+
+Safe mode:
+
+```bash
+novacore update:crud Product --safe
+novacore update:crud Product --mode=safe
 ```
 
 Atau:
 
 ```bash
-go run cmd/framework/main.go make update-crud Product
+novacore make update-crud Product
 ```
 
 CLI akan meminta konfirmasi karena migration yang dibuat akan menghapus dan membuat ulang table:
@@ -76,3 +85,27 @@ Continue? [y/N]:
 Jawab `y` atau `Y` untuk lanjut. Jawab `n`, `N`, atau kosong untuk batal.
 
 Setelah itu CLI akan menanyakan ulang metode endpoint dan field. Generator memperbarui model, DTO, service, repository, handler, routes, test, migration, docs endpoint, dan Postman request.
+
+Safe mode menghasilkan migration `ALTER TABLE`, bukan `DROP TABLE`. Field baru yang required wajib memiliki default value.
+
+## Relation Generator
+
+```bash
+novacore make:relation Product Category --type=belongs-to --include
+novacore make:relation Category Product --type=has-many --nested
+novacore make:relation User Role --type=many-to-many
+novacore make:relation User Profile --type=has-one
+```
+
+Mode interaktif:
+
+```bash
+novacore make:relation
+```
+
+Include query didukung untuk relasi yang didaftarkan:
+
+```http
+GET /api/v1/products?include=category
+GET /api/v1/orders?include=user,items
+```

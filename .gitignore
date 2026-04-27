@@ -1,4 +1,5 @@
 .env
+.rencana_update
 .cache/
 bin/
 database/*.db

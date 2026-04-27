@@ -13,13 +13,13 @@ Checklist deployment:
 Build binary:
 
 ```bash
-go build -o bin/novacore cmd/server/main.go
+go build -o bin/novacore cmd/novacore/main.go
 ```
 
 Urutan deployment yang disarankan:
 
 ```bash
-go run cmd/framework/main.go migrate
-go run cmd/framework/main.go seed
-./bin/novacore
+./bin/novacore migrate
+./bin/novacore seed
+./bin/novacore run
 ```

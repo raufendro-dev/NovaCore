@@ -10,6 +10,12 @@ import (
 type {{.Name}} struct {
 	gorm.Model
 {{range .Fields}}	{{.GoName}} {{.GoType}} ` + "`json:\"{{.JSONName}}\" gorm:\"{{.GormTag}}\"`" + `
+{{end}}{{range .Relations}}{{if eq .Type "belongs-to"}}	{{.ForeignKeyGo}} uint ` + "`json:\"{{.ForeignKey}}\" gorm:\"index\"`" + `
+	{{.TargetField}} any ` + "`json:\"{{.TargetSnake}},omitempty\" gorm:\"-\"`" + `
+{{else if eq .Type "has-one"}}	{{.TargetField}} any ` + "`json:\"{{.TargetSnake}},omitempty\" gorm:\"-\"`" + `
+{{else if eq .Type "has-many"}}	{{.TargetFieldMany}} []any ` + "`json:\"{{.TargetSnake}}s,omitempty\" gorm:\"-\"`" + `
+{{else if eq .Type "many-to-many"}}	{{.TargetFieldMany}} []any ` + "`json:\"{{.TargetSnake}}s,omitempty\" gorm:\"-\"`" + `
+{{end}}
 {{end}}}
 `
 
@@ -23,10 +29,14 @@ import (
 
 type Create{{.Name}}Request struct {
 {{range .Fields}}	{{.GoName}} {{.GoType}} ` + "`json:\"{{.JSONName}}\" validate:\"{{.ValidateCreate}}\"`" + `
+{{end}}{{range .Relations}}{{if eq .Type "belongs-to"}}	{{.ForeignKeyGo}} uint ` + "`json:\"{{.ForeignKey}}\" validate:\"omitempty\"`" + `
+{{end}}
 {{end}}}
 
 type Update{{.Name}}Request struct {
 {{range .Fields}}	{{.GoName}} *{{.GoType}} ` + "`json:\"{{.JSONName}}\" validate:\"{{.ValidateUpdate}}\"`" + `
+{{end}}{{range .Relations}}{{if eq .Type "belongs-to"}}	{{.ForeignKeyGo}} *uint ` + "`json:\"{{.ForeignKey}}\" validate:\"omitempty\"`" + `
+{{end}}
 {{end}}}
 `
 
@@ -39,8 +49,8 @@ import (
 )
 
 type Repository interface {
-	FindAll() ([]{{.Name}}, error)
-	FindByID(id uint) (*{{.Name}}, error)
+	FindAll(includes []string) ([]{{.Name}}, error)
+	FindByID(id uint, includes []string) (*{{.Name}}, error)
 	Create(model *{{.Name}}) error
 	Update(model *{{.Name}}) error
 	Delete(model *{{.Name}}) error
@@ -50,12 +60,18 @@ type GormRepository struct{ db *gorm.DB }
 
 func NewRepository(db *gorm.DB) Repository { return &GormRepository{db: db} }
 
-func (r *GormRepository) FindAll() ([]{{.Name}}, error) {
+func (r *GormRepository) FindAll(includes []string) ([]{{.Name}}, error) {
+	if err := validateIncludes(includes); err != nil {
+		return nil, err
+	}
 	var rows []{{.Name}}
 	return rows, r.db.Find(&rows).Error
 }
 
-func (r *GormRepository) FindByID(id uint) (*{{.Name}}, error) {
+func (r *GormRepository) FindByID(id uint, includes []string) (*{{.Name}}, error) {
+	if err := validateIncludes(includes); err != nil {
+		return nil, err
+	}
 	var row {{.Name}}
 	err := r.db.First(&row, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -67,6 +83,18 @@ func (r *GormRepository) FindByID(id uint) (*{{.Name}}, error) {
 func (r *GormRepository) Create(model *{{.Name}}) error { return r.db.Create(model).Error }
 func (r *GormRepository) Update(model *{{.Name}}) error { return r.db.Save(model).Error }
 func (r *GormRepository) Delete(model *{{.Name}}) error { return r.db.Delete(model).Error }
+
+func validateIncludes(includes []string) error {
+	allowed := map[string]struct{}{
+{{range .Relations}}{{if .Include}}		"{{.TargetSnake}}": {},
+{{end}}{{end}}	}
+	for _, include := range includes {
+		if _, ok := allowed[include]; !ok {
+			return errors.New("invalid include: " + include)
+		}
+	}
+	return nil
+}
 `
 
 const serviceTpl = `package {{.Snake}}
@@ -77,30 +105,36 @@ type Service struct{ repo Repository }
 
 func NewService(repo Repository) *Service { return &Service{repo: repo} }
 
-func (s *Service) List() ([]{{.Name}}, error) { return s.repo.FindAll() }
+func (s *Service) List(includes []string) ([]{{.Name}}, error) { return s.repo.FindAll(includes) }
 
-func (s *Service) Get(id uint) (*{{.Name}}, error) { return s.repo.FindByID(id) }
+func (s *Service) Get(id uint, includes []string) (*{{.Name}}, error) { return s.repo.FindByID(id, includes) }
 
 func (s *Service) Create(req Create{{.Name}}Request) (*{{.Name}}, error) {
 	model := &{{.Name}}{
 {{range .Fields}}		{{.GoName}}: req.{{.GoName}},
+{{end}}{{range .Relations}}{{if eq .Type "belongs-to"}}		{{.ForeignKeyGo}}: req.{{.ForeignKeyGo}},
+{{end}}
 {{end}}	}
 	return model, s.repo.Create(model)
 }
 
 func (s *Service) Update(id uint, req Update{{.Name}}Request) (*{{.Name}}, error) {
-	model, err := s.repo.FindByID(id)
+	model, err := s.repo.FindByID(id, nil)
 	if err != nil || model == nil {
 		return nil, errors.New("{{.Lower}} not found")
 	}
 {{range .Fields}}	if req.{{.GoName}} != nil {
 		model.{{.GoName}} = *req.{{.GoName}}
 	}
+{{end}}{{range .Relations}}{{if eq .Type "belongs-to"}}	if req.{{.ForeignKeyGo}} != nil {
+		model.{{.ForeignKeyGo}} = *req.{{.ForeignKeyGo}}
+	}
+{{end}}
 {{end}}	return model, s.repo.Update(model)
 }
 
 func (s *Service) Delete(id uint) error {
-	model, err := s.repo.FindByID(id)
+	model, err := s.repo.FindByID(id, nil)
 	if err != nil || model == nil {
 		return errors.New("{{.Lower}} not found")
 	}
@@ -113,6 +147,7 @@ const handlerTpl = `package {{.Snake}}
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	api "github.com/raufendro/novacore/internal/http"
@@ -124,7 +159,7 @@ type Handler struct{ service *Service }
 func NewHandler(service *Service) *Handler { return &Handler{service: service} }
 
 func (h *Handler) Index(c *gin.Context) {
-	rows, err := h.service.List()
+	rows, err := h.service.List(parseIncludes(c))
 	if err != nil {
 		api.Error(c, http.StatusInternalServerError, "Failed to retrieve data", nil)
 		return
@@ -137,7 +172,7 @@ func (h *Handler) Show(c *gin.Context) {
 	if !ok {
 		return
 	}
-	row, err := h.service.Get(id)
+	row, err := h.service.Get(id, parseIncludes(c))
 	if err != nil || row == nil {
 		api.Error(c, http.StatusNotFound, "{{.Name}} not found", nil)
 		return
@@ -197,6 +232,15 @@ func (h *Handler) Destroy(c *gin.Context) {
 	api.OK(c, "Data deleted successfully", gin.H{"id": id}, nil)
 }
 
+{{range .Relations}}{{if .Nested}}
+func (h *Handler) {{.TargetFieldMany}}ForParent(c *gin.Context) {
+	api.OK(c, "Nested endpoint scaffold", gin.H{
+		"parent_id": c.Param("id"),
+		"relation": "{{.TargetSnake}}",
+	}, nil)
+}
+{{end}}{{end}}
+
 func parseID(c *gin.Context) (uint, bool) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -204,6 +248,21 @@ func parseID(c *gin.Context) (uint, bool) {
 		return 0, false
 	}
 	return uint(id), true
+}
+
+func parseIncludes(c *gin.Context) []string {
+	raw := c.Query("include")
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 `
 
@@ -245,6 +304,10 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, jwt *security.JWTManag
 {{if .HasDELETE}}
 	group.DELETE("/:id", handler.Destroy)
 {{end}}
+{{range .Relations}}{{if .Nested}}
+	group.GET("/:id/{{.TargetPluralPath}}", handler.{{.TargetFieldMany}}ForParent)
+	group.POST("/:id/{{.TargetPluralPath}}", handler.{{.TargetFieldMany}}ForParent)
+{{end}}{{end}}
 }
 `
 
@@ -257,8 +320,8 @@ import (
 
 type fakeRepo struct{ rows []{{.Name}} }
 
-func (f *fakeRepo) FindAll() ([]{{.Name}}, error) { return f.rows, nil }
-func (f *fakeRepo) FindByID(id uint) (*{{.Name}}, error) {
+func (f *fakeRepo) FindAll(includes []string) ([]{{.Name}}, error) { return f.rows, nil }
+func (f *fakeRepo) FindByID(id uint, includes []string) (*{{.Name}}, error) {
 	for i := range f.rows {
 		if f.rows[i].ID == id {
 			return &f.rows[i], nil

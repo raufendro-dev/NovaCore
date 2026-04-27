@@ -41,7 +41,8 @@ NovaCore memakai stack yang stabil dan umum dipakai di ekosistem Go:
 ```bash
 cp .env.example .env
 go mod tidy
-go run cmd/server/main.go
+go install ./cmd/novacore
+novacore run
 ```
 
 Server berjalan di:
@@ -54,6 +55,13 @@ Health check:
 
 ```http
 GET /api/v1/health
+```
+
+Jika `$GOPATH/bin` belum ada di `PATH`, kamu juga bisa build lokal:
+
+```bash
+go build -o bin/novacore cmd/novacore/main.go
+./bin/novacore run
 ```
 
 ## Konfigurasi
@@ -86,7 +94,7 @@ Auth endpoint sudah built-in, jadi tidak perlu digenerate.
 Untuk database SQL (`sqlite`, `mysql`, `postgres`), tabel `users` auth otomatis dibuat saat server start:
 
 ```bash
-go run cmd/server/main.go
+novacore run
 ```
 
 NovaCore menjalankan GORM `AutoMigrate` untuk model auth bawaan. Jadi setelah clone, `cp .env.example .env`, dan start server, tabel user auth sudah siap dipakai. Untuk production schema aplikasi, tetap disarankan memakai migration agar perubahan database tercatat.
@@ -126,7 +134,7 @@ Authorization: Bearer <access_token>
 CRUD default protected dengan JWT:
 
 ```bash
-go run cmd/framework/main.go make:crud Product
+novacore make:crud Product
 ```
 
 Sebelum generate, CLI akan menanyakan metode endpoint yang ingin dibuat, lalu field yang ingin disimpan. Field default `id`, `created_at`, `updated_at`, dan `deleted_at` sudah otomatis tersedia dari `gorm.Model`, jadi tidak perlu dimasukkan. Tekan `Ctrl+D` pada prompt `Field name` untuk menyelesaikan pengisian field.
@@ -138,9 +146,11 @@ Methods [GET, POST, PUT, PATCH, DELETE]: POST, GET, DELETE
 Field name: name
 Type [string]: string
 Required? [y/N]: y
+Default value [none]:
 Field name: price
 Type [string]: float
 Required? [y/N]: n
+Default value [none]: 0
 Field name: <Ctrl+D>
 ```
 
@@ -196,7 +206,7 @@ Setelah generate:
 
 ```bash
 go test ./...
-go run cmd/server/main.go
+novacore run
 ```
 
 ## CRUD Public
@@ -204,7 +214,7 @@ go run cmd/server/main.go
 Untuk resource yang memang boleh diakses publik, gunakan `--public`.
 
 ```bash
-go run cmd/framework/main.go make:crud Article --public
+novacore make:crud Article --public
 ```
 
 Route yang dibuat tidak memakai JWT middleware.
@@ -214,13 +224,25 @@ Route yang dibuat tidak memakai JWT middleware.
 Jika setelah membuat CRUD ada field atau tipe data yang terlewat, gunakan:
 
 ```bash
-go run cmd/framework/main.go update:crud Product
+novacore update:crud Product
+```
+
+Safe mode:
+
+```bash
+novacore update:crud Product --safe
+```
+
+atau:
+
+```bash
+novacore update:crud Product --mode=safe
 ```
 
 Alias lain:
 
 ```bash
-go run cmd/framework/main.go make update-crud Product
+novacore make update-crud Product
 ```
 
 Command ini akan menanyakan konfirmasi terlebih dahulu:
@@ -237,18 +259,56 @@ Setelah dikonfirmasi, CLI akan menanyakan ulang metode endpoint dan field. NovaC
 
 Migration update yang dibuat bersifat destructive karena menjalankan `DROP TABLE` lalu membuat ulang table. Jalankan migration ini hanya jika kamu siap kehilangan data tabel tersebut.
 
+Gunakan `--safe` agar migration memakai `ALTER TABLE` untuk field baru dan tidak menjalankan `DROP TABLE`. Jika field baru required, default value wajib diisi agar row lama tetap valid.
+
+## Generate Relation
+
+Relasi antar CRUD/model bisa dibuat dengan:
+
+```bash
+novacore make:relation Product Category --type=belongs-to --include
+novacore make:relation Category Product --type=has-many --nested
+novacore make:relation User Role --type=many-to-many
+novacore make:relation User Profile --type=has-one
+```
+
+Mode interaktif:
+
+```bash
+novacore make:relation
+```
+
+CLI akan menanyakan source model, target model, tipe relasi, foreign key, nested endpoint, include query, Postman, dan docs.
+
+Tipe relasi:
+
+- `belongs-to`
+- `has-one`
+- `has-many`
+- `many-to-many`
+
+Include query:
+
+```http
+GET /api/v1/products?include=category
+GET /api/v1/orders?include=user,items
+```
+
+NovaCore memvalidasi include agar hanya relasi yang terdaftar yang diterima.
+
 ## Command Generator
 
 ```bash
-go run cmd/framework/main.go make:module User
-go run cmd/framework/main.go make:model Product
-go run cmd/framework/main.go make:controller Product
-go run cmd/framework/main.go make:service Product
-go run cmd/framework/main.go make:repository Product
-go run cmd/framework/main.go make:endpoint Product
-go run cmd/framework/main.go make:crud Product
-go run cmd/framework/main.go update:crud Product
-go run cmd/framework/main.go make:migration create_products_table
+novacore make:module User
+novacore make:model Product
+novacore make:controller Product
+novacore make:service Product
+novacore make:repository Product
+novacore make:endpoint Product
+novacore make:crud Product
+novacore update:crud Product
+novacore make:relation Product Category --type=belongs-to
+novacore make:migration create_products_table
 ```
 
 Flag `--public` tersedia untuk:
@@ -333,7 +393,7 @@ Seeder dipakai untuk mengisi data awal, misalnya admin pertama, role default, pe
 Buat migration:
 
 ```bash
-go run cmd/framework/main.go make:migration create_products_table
+novacore make:migration create_products_table
 ```
 
 Command ini membuat file:
@@ -348,7 +408,7 @@ Isi file `.up.sql` dengan SQL untuk menerapkan perubahan. Isi file `.down.sql` d
 Jalankan migration:
 
 ```bash
-go run cmd/framework/main.go migrate
+novacore migrate
 ```
 
 NovaCore mencatat migration yang sudah jalan di tabel `schema_migrations`, jadi file `.up.sql` yang sama tidak dijalankan berulang.
@@ -356,7 +416,7 @@ NovaCore mencatat migration yang sudah jalan di tabel `schema_migrations`, jadi 
 Buat seeder:
 
 ```bash
-go run cmd/framework/main.go make:seeder create_admin_user
+novacore make:seeder create_admin_user
 ```
 
 Isi file `seeders/<timestamp>_create_admin_user.sql` dengan SQL data awal. Seeder sebaiknya idempotent, misalnya memakai `INSERT ... ON CONFLICT`, `INSERT IGNORE`, atau pola SQL sejenis sesuai database.
@@ -364,7 +424,7 @@ Isi file `seeders/<timestamp>_create_admin_user.sql` dengan SQL data awal. Seede
 Jalankan seeder:
 
 ```bash
-go run cmd/framework/main.go seed
+novacore seed
 ```
 
 NovaCore mencatat seeder yang sudah jalan di tabel `seed_history`, jadi file seeder yang sama tidak dijalankan berulang.
@@ -460,7 +520,7 @@ go test ./...
 Build binary:
 
 ```bash
-go build -o bin/novacore cmd/server/main.go
+go build -o bin/novacore cmd/novacore/main.go
 ```
 
 Production checklist:

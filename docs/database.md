@@ -47,7 +47,7 @@ Repository generated memakai GORM untuk SQL. Untuk MongoDB, gunakan adapter repo
 Untuk database SQL (`sqlite`, `mysql`, `postgres`), tabel `users` untuk auth otomatis dibuat saat server start:
 
 ```bash
-go run cmd/server/main.go
+novacore run
 ```
 
 Ini dilakukan oleh GORM `AutoMigrate` pada model auth bawaan. Untuk production, schema module aplikasi sebaiknya tetap dikelola lewat migration.
@@ -59,8 +59,8 @@ Migration adalah file SQL untuk mengubah struktur database secara terkontrol. Gu
 Migration:
 
 ```bash
-go run cmd/framework/main.go make:migration create_products_table
-go run cmd/framework/main.go migrate
+novacore make:migration create_products_table
+novacore migrate
 ```
 
 File `.up.sql` dijalankan saat migration. NovaCore mencatat file yang sudah dijalankan di tabel `schema_migrations`.
@@ -69,13 +69,15 @@ Untuk CRUD generated, kolom migration mengikuti field yang kamu isi saat prompt 
 
 Jika menggunakan `update:crud`, NovaCore membuat migration reset table yang menjalankan `DROP TABLE` lalu membuat table ulang. Data lama akan hilang dan ID akan mulai dari awal setelah migration dijalankan. Gunakan hanya ketika perubahan schema memang boleh menghapus data.
 
+Gunakan `update:crud --safe` untuk migration berbasis `ALTER TABLE`. Safe mode menjaga data lama tetap ada dan menolak field baru yang `required` tanpa default value.
+
 ## Seeder
 
 Seeder adalah file SQL untuk mengisi data awal seperti admin pertama, role default, permission default, atau data referensi.
 
 ```bash
-go run cmd/framework/main.go make:seeder create_admin_user
-go run cmd/framework/main.go seed
+novacore make:seeder create_admin_user
+novacore seed
 ```
 
 NovaCore mencatat seeder yang sudah dijalankan di tabel `seed_history`.

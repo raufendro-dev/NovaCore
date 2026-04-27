@@ -5,12 +5,13 @@ git clone <repository-url> novacore
 cd novacore
 cp .env.example .env
 go mod tidy
-go run cmd/server/main.go
+go install ./cmd/novacore
+novacore run
 ```
 
 Untuk membuat CRUD:
 
 ```bash
-go run cmd/framework/main.go make:crud Product
-go run cmd/server/main.go
+novacore make:crud Product
+novacore run
 ```
