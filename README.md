@@ -1,63 +1,75 @@
 # NovaCore
 
-NovaCore adalah framework backend Golang modular untuk membangun REST API production-ready dengan cepat. Framework ini sudah membawa JWT authentication, refresh token, RBAC middleware, adapter database, generator CRUD, migration runner, dokumentasi, dan Postman Collection otomatis.
+NovaCore adalah framework backend Golang untuk membangun REST API yang modular, production-ready, dan nyaman dipakai dari tahap prototyping sampai aplikasi serius. Framework ini sudah membawa JWT authentication, refresh token, RBAC middleware, adapter database, generator CRUD, migration, seeder, dokumentasi endpoint, dan Postman Collection otomatis.
 
-NovaCore dirancang supaya mudah dipahami developer junior, tetapi tetap rapi untuk kebutuhan tim backend yang lebih senior.
+NovaCore dibuat supaya developer junior bisa memahami struktur backend yang rapi, sementara developer senior tetap mendapat fondasi yang mudah dikembangkan.
+
+## Daftar Isi
+
+- [Fitur Utama](#fitur-utama)
+- [Tech Stack](#tech-stack)
+- [Quick Start](#quick-start)
+- [Instalasi CLI](#instalasi-cli)
+- [Command Reference](#command-reference)
+- [Konfigurasi](#konfigurasi)
+- [Authentication](#authentication)
+- [Generate CRUD](#generate-crud)
+- [Update CRUD](#update-crud)
+- [Relasi Model](#relasi-model)
+- [Database](#database)
+- [Migration dan Seeder](#migration-dan-seeder)
+- [Postman](#postman)
+- [Response Format](#response-format)
+- [Struktur Project](#struktur-project)
+- [Dokumentasi Lanjutan](#dokumentasi-lanjutan)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [License](#license)
 
 ## Fitur Utama
 
 - Struktur project backend Go yang bersih dan scalable
 - REST API dengan response format konsisten
-- JWT authentication dan refresh token
+- JWT authentication, refresh token, logout, dan current user endpoint
 - Password hashing dengan bcrypt
 - Role-based access control
-- Middleware logger, recovery, CORS, request ID, rate limiter, timeout, secure headers
+- Middleware logger, recovery, CORS, request ID, rate limiter, timeout, dan secure headers
 - Database support: SQLite, MySQL, PostgreSQL, MongoDB
 - Redis optional untuk cache/session
-- CLI generator untuk module, model, service, repository, controller, endpoint, CRUD, dan migration
+- CLI generator untuk module, model, controller, service, repository, endpoint, CRUD, migration, seeder, dan relasi
 - CRUD generated protected by JWT secara default
-- Opsi CRUD public dengan flag `--public`
+- Opsi CRUD publik dengan flag `--public`
+- Safe update CRUD dengan migration `ALTER TABLE`
 - Auto-update Postman Collection dan Environment
 - Dokumentasi lengkap di folder `docs/`
 - Testing setup untuk service dan generated CRUD
 
 ## Tech Stack
 
-NovaCore memakai stack yang stabil dan umum dipakai di ekosistem Go:
+NovaCore memakai library yang stabil dan umum dipakai di ekosistem Go:
 
-- Gin untuk HTTP router
-- GORM untuk SQL database
-- MongoDB official driver untuk document database
-- Redis Go client untuk Redis
-- Viper untuk config loader
-- Cobra untuk CLI generator
-- Zap untuk structured logging
-- bcrypt untuk password hashing
-- `golang-jwt/jwt` untuk JWT
-- `validator/v10` untuk request validation
+| Kebutuhan | Library |
+| --- | --- |
+| HTTP router | Gin |
+| SQL ORM | GORM |
+| MongoDB | MongoDB official driver |
+| Redis | Redis Go client |
+| Config loader | Viper |
+| CLI | Cobra |
+| Logging | Zap |
+| Password hashing | bcrypt |
+| JWT | `golang-jwt/jwt` |
+| Validation | `validator/v10` |
 
 ## Quick Start
 
 ```bash
+git clone <repository-url> novacore
+cd novacore
 cp .env.example .env
 go mod tidy
 go install ./cmd/novacore
 novacore run
-```
-
-Jika setelah `go install` muncul `zsh: command not found: novacore`, tambahkan folder binary Go ke `PATH`:
-
-```bash
-echo 'export PATH="$(go env GOPATH)/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-novacore version
-```
-
-Untuk cek lokasi binary hasil install:
-
-```bash
-go env GOPATH
-ls "$(go env GOPATH)/bin/novacore"
 ```
 
 Server berjalan di:
@@ -72,10 +84,51 @@ Health check:
 GET /api/v1/health
 ```
 
-Lihat versi NovaCore:
+## Instalasi CLI
+
+Install command `novacore`:
+
+```bash
+go install ./cmd/novacore
+```
+
+Lihat versi:
 
 ```bash
 novacore version
+```
+
+Output versi:
+
+```text
+NovaCore CLI
+Version     : 0.1.0
+Framework   : Production-ready Go REST API framework
+Author      : Rauf Endro Widagdo aka raufendro
+Repository  : github.com/raufendro/novacore
+License     : MIT
+```
+
+Jika setelah `go install` muncul `zsh: command not found: novacore`, tambahkan folder binary Go ke `PATH`:
+
+```bash
+echo 'export PATH="$(go env GOPATH)/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+novacore version
+```
+
+Cek lokasi binary hasil install:
+
+```bash
+go env GOPATH
+ls "$(go env GOPATH)/bin/novacore"
+```
+
+Alternatif tanpa mengubah `PATH`:
+
+```bash
+go build -o bin/novacore cmd/novacore/main.go
+./bin/novacore run
 ```
 
 Update project framework dari repository Git:
@@ -84,22 +137,46 @@ Update project framework dari repository Git:
 novacore update
 ```
 
-Command ini menjalankan `git pull` di direktori project NovaCore yang sedang aktif.
-
 Uninstall binary CLI NovaCore:
 
 ```bash
 novacore uninstall
 ```
 
-Command ini menghapus binary `novacore` yang sedang dijalankan. Jika kamu menjalankan via `go run`, uninstall akan ditolak karena binary tersebut hanya file sementara Go.
+`novacore uninstall` menghapus binary `novacore` yang sedang dijalankan. Jika command dijalankan via `go run`, uninstall akan ditolak karena binary tersebut hanya file sementara Go.
 
-Jika tidak ingin mengubah `PATH`, kamu juga bisa build lokal dan menjalankannya lewat path file:
+## Command Reference
 
-```bash
-go build -o bin/novacore cmd/novacore/main.go
-./bin/novacore run
-```
+| Command | Fungsi |
+| --- | --- |
+| `novacore run` | Menjalankan HTTP server |
+| `novacore version` | Menampilkan versi, author, repository, dan license |
+| `novacore update` | Menjalankan `git pull` pada direktori project aktif |
+| `novacore uninstall` | Menghapus binary CLI NovaCore |
+| `novacore make:module User` | Generate module |
+| `novacore make:model Product` | Generate model |
+| `novacore make:controller Product` | Generate controller/handler |
+| `novacore make:service Product` | Generate service |
+| `novacore make:repository Product` | Generate repository |
+| `novacore make:endpoint Product` | Generate endpoint |
+| `novacore make:crud Product` | Generate CRUD lengkap |
+| `novacore update:crud Product` | Update CRUD yang sudah pernah digenerate |
+| `novacore make:relation Product Category --type=belongs-to` | Generate relasi antar model |
+| `novacore make:migration create_products_table` | Generate file migration SQL |
+| `novacore migrate` | Menjalankan migration |
+| `novacore make:seeder create_admin_user` | Generate file seeder |
+| `novacore seed` | Menjalankan seeder |
+
+Flag penting:
+
+| Flag | Dipakai di | Fungsi |
+| --- | --- | --- |
+| `--public` | `make:crud`, `make:module`, `make:endpoint` | Route tidak memakai JWT middleware |
+| `--safe` | `update:crud` | Membuat migration aman memakai `ALTER TABLE` |
+| `--mode=safe` | `update:crud` | Sama seperti `--safe` |
+| `--type=belongs-to` | `make:relation` | Menentukan tipe relasi |
+| `--nested` | `make:relation` | Membuat nested endpoint |
+| `--include` | `make:relation` | Mengaktifkan include query |
 
 ## Konfigurasi
 
@@ -124,7 +201,7 @@ JWT_REFRESH_EXPIRY=168h
 
 Jangan gunakan `JWT_SECRET` default untuk production.
 
-## Auth
+## Authentication
 
 Auth endpoint sudah built-in, jadi tidak perlu digenerate.
 
@@ -138,11 +215,11 @@ NovaCore menjalankan GORM `AutoMigrate` untuk model auth bawaan. Jadi setelah cl
 
 | Method | Endpoint | Keterangan |
 | --- | --- | --- |
-| POST | `/api/v1/auth/register` | Membuat user baru |
-| POST | `/api/v1/auth/login` | Login dan mendapatkan token |
-| POST | `/api/v1/auth/refresh` | Membuat access token baru |
-| POST | `/api/v1/auth/logout` | Logout client-side |
-| GET | `/api/v1/auth/me` | Mengambil user saat ini |
+| `POST` | `/api/v1/auth/register` | Membuat user baru |
+| `POST` | `/api/v1/auth/login` | Login dan mendapatkan token |
+| `POST` | `/api/v1/auth/refresh` | Membuat access token baru |
+| `POST` | `/api/v1/auth/logout` | Logout client-side |
+| `GET` | `/api/v1/auth/me` | Mengambil user saat ini |
 
 Contoh register:
 
@@ -174,7 +251,15 @@ CRUD default protected dengan JWT:
 novacore make:crud Product
 ```
 
-Sebelum generate, CLI akan menanyakan metode endpoint yang ingin dibuat, lalu field yang ingin disimpan. Field default `id`, `created_at`, `updated_at`, dan `deleted_at` sudah otomatis tersedia dari `gorm.Model`, jadi tidak perlu dimasukkan. Tekan `Ctrl+D` pada prompt `Field name` untuk menyelesaikan pengisian field.
+Untuk CRUD publik:
+
+```bash
+novacore make:crud Article --public
+```
+
+Sebelum generate, CLI akan menanyakan metode endpoint yang ingin dibuat, lalu field yang ingin disimpan. Field default `id`, `created_at`, `updated_at`, dan `deleted_at` sudah otomatis tersedia dari `gorm.Model`, jadi tidak perlu dimasukkan.
+
+Tekan `Ctrl+D` pada prompt `Field name` untuk menyelesaikan pengisian field.
 
 Contoh input:
 
@@ -201,24 +286,15 @@ Tipe field yang didukung:
 - `bool`
 - `time`
 
-Metode yang didukung:
-
-- `GET`: membuat `GET /resources` dan `GET /resources/:id`
-- `POST`: membuat `POST /resources`
-- `PUT`: membuat `PUT /resources/:id`
-- `PATCH`: membuat `PATCH /resources/:id`
-- `DELETE`: membuat `DELETE /resources/:id`
-
-Endpoint yang dibuat:
+Metode endpoint:
 
 | Method | Endpoint |
 | --- | --- |
-| GET | `/api/v1/products` |
-| GET | `/api/v1/products/:id` |
-| POST | `/api/v1/products` |
-| PUT | `/api/v1/products/:id` |
-| PATCH | `/api/v1/products/:id` |
-| DELETE | `/api/v1/products/:id` |
+| `GET` | `/api/v1/products` dan `/api/v1/products/:id` |
+| `POST` | `/api/v1/products` |
+| `PUT` | `/api/v1/products/:id` |
+| `PATCH` | `/api/v1/products/:id` |
+| `DELETE` | `/api/v1/products/:id` |
 
 Generator membuat:
 
@@ -233,28 +309,13 @@ Generator membuat:
 - Dokumentasi endpoint
 - Postman requests
 
-Field yang kamu masukkan akan ikut dibuat di model, DTO validation, service assignment, migration SQL, docs endpoint, dan Postman body example.
-
-Metode yang kamu pilih akan menentukan route, docs endpoint, dan Postman request yang dibuat.
-
-Jika `Field name` kosong lalu ditekan `Enter`, CLI akan meminta input ulang. Gunakan `Ctrl+D` untuk selesai.
-
 Setelah generate:
 
 ```bash
 go test ./...
+novacore migrate
 novacore run
 ```
-
-## CRUD Public
-
-Untuk resource yang memang boleh diakses publik, gunakan `--public`.
-
-```bash
-novacore make:crud Article --public
-```
-
-Route yang dibuat tidak memakai JWT middleware.
 
 ## Update CRUD
 
@@ -282,7 +343,7 @@ Alias lain:
 novacore make update-crud Product
 ```
 
-Command ini akan menanyakan konfirmasi terlebih dahulu:
+Mode reset akan meminta konfirmasi:
 
 ```text
 Updating CRUD columns will create a reset migration.
@@ -292,13 +353,9 @@ Continue? [y/N]:
 
 Jawab `y` atau `Y` untuk lanjut. Jawab `n`, `N`, atau kosong untuk membatalkan.
 
-Setelah dikonfirmasi, CLI akan menanyakan ulang metode endpoint dan field. NovaCore lalu memperbarui model, DTO validation, repository, service, handler, routes API, test, migration reset table, dokumentasi endpoint, dan Postman request.
+Gunakan `--safe` agar migration memakai `ALTER TABLE` dan tidak menjalankan `DROP TABLE`. Jika field baru required, default value wajib diisi agar row lama tetap valid.
 
-Migration update yang dibuat bersifat destructive karena menjalankan `DROP TABLE` lalu membuat ulang table. Jalankan migration ini hanya jika kamu siap kehilangan data tabel tersebut.
-
-Gunakan `--safe` agar migration memakai `ALTER TABLE` untuk field baru dan tidak menjalankan `DROP TABLE`. Jika field baru required, default value wajib diisi agar row lama tetap valid.
-
-## Generate Relation
+## Relasi Model
 
 Relasi antar CRUD/model bisa dibuat dengan:
 
@@ -332,33 +389,6 @@ GET /api/v1/orders?include=user,items
 ```
 
 NovaCore memvalidasi include agar hanya relasi yang terdaftar yang diterima.
-
-## Command Generator
-
-```bash
-novacore make:module User
-novacore make:model Product
-novacore make:controller Product
-novacore make:service Product
-novacore make:repository Product
-novacore make:endpoint Product
-novacore make:crud Product
-novacore update:crud Product
-novacore make:relation Product Category --type=belongs-to
-novacore make:migration create_products_table
-novacore migrate
-novacore seed
-novacore run
-novacore version
-novacore update
-novacore uninstall
-```
-
-Flag `--public` tersedia untuk:
-
-- `make:crud`
-- `make:module`
-- `make:endpoint`
 
 ## Database
 
@@ -419,7 +449,7 @@ Jika muncul error seperti `Unknown database 'app_db'`, artinya MySQL/PostgreSQL 
 CREATE DATABASE app_db;
 ```
 
-atau aktifkan auto-create untuk development:
+Atau aktifkan auto-create untuk development:
 
 ```env
 DB_AUTO_CREATE=true
@@ -446,8 +476,6 @@ migrations/<timestamp>_create_products_table.up.sql
 migrations/<timestamp>_create_products_table.down.sql
 ```
 
-Isi file `.up.sql` dengan SQL untuk menerapkan perubahan. Isi file `.down.sql` dengan SQL rollback sebagai dokumentasi rollback.
-
 Jalankan migration:
 
 ```bash
@@ -461,8 +489,6 @@ Buat seeder:
 ```bash
 novacore make:seeder create_admin_user
 ```
-
-Isi file `seeders/<timestamp>_create_admin_user.sql` dengan SQL data awal. Seeder sebaiknya idempotent, misalnya memakai `INSERT ... ON CONFLICT`, `INSERT IGNORE`, atau pola SQL sejenis sesuai database.
 
 Jalankan seeder:
 
@@ -527,22 +553,22 @@ tests/            integration/e2e tests
 seeders/          data seeder
 ```
 
-## Dokumentasi
+## Dokumentasi Lanjutan
 
 Dokumentasi detail tersedia di:
 
-- `docs/introduction.md`
-- `docs/installation.md`
-- `docs/configuration.md`
-- `docs/database.md`
-- `docs/authentication.md`
-- `docs/generator.md`
-- `docs/routing.md`
-- `docs/middleware.md`
-- `docs/postman.md`
-- `docs/deployment.md`
-- `docs/testing.md`
-- `docs/best-practices.md`
+- [Introduction](docs/introduction.md)
+- [Installation](docs/installation.md)
+- [Configuration](docs/configuration.md)
+- [Database](docs/database.md)
+- [Authentication](docs/authentication.md)
+- [Generator](docs/generator.md)
+- [Routing](docs/routing.md)
+- [Middleware](docs/middleware.md)
+- [Postman](docs/postman.md)
+- [Deployment](docs/deployment.md)
+- [Testing](docs/testing.md)
+- [Best Practices](docs/best-practices.md)
 
 ## Testing
 
@@ -574,7 +600,6 @@ Production checklist:
 - Jalankan migration
 - Batasi CORS origin
 - Jalankan aplikasi di balik reverse proxy atau container orchestrator
-
 
 ## License
 

@@ -21,6 +21,7 @@ import (
 )
 
 const version = "0.1.0"
+const author = "Rauf Endro Widagdo aka raufendro"
 
 func Execute() {
 	root := &cobra.Command{Use: "novacore", Short: "NovaCore backend framework CLI"}
@@ -34,9 +35,16 @@ func Execute() {
 		Use:   "version",
 		Short: "Show NovaCore version",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Fprintf(cmd.OutOrStdout(), "NovaCore %s\n", version)
-			fmt.Fprintln(cmd.OutOrStdout(), "Created by Rauf Endro Widagdo aka raufendro")
-			fmt.Fprintln(cmd.OutOrStdout(), "Terima kasih sudah menggunakan NovaCore. Semangat coding dan bangun backend yang rapi!")
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "NovaCore CLI\n")
+			fmt.Fprintf(out, "Version     : %s\n", version)
+			fmt.Fprintf(out, "Framework   : Production-ready Go REST API framework\n")
+			fmt.Fprintf(out, "Author      : %s\n", author)
+			fmt.Fprintf(out, "Repository  : github.com/raufendro/novacore\n")
+			fmt.Fprintf(out, "License     : MIT\n")
+			fmt.Fprintln(out)
+			fmt.Fprintln(out, "Terima kasih sudah menggunakan NovaCore.")
+			fmt.Fprintln(out, "Semangat coding dan bangun backend yang rapi, aman, dan mudah dikembangkan.")
 		},
 	})
 	root.AddCommand(&cobra.Command{
