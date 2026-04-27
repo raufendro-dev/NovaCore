@@ -6,18 +6,27 @@ cd novacore
 cp .env.example .env
 go mod tidy
 go install ./cmd/novacore
+novacore setup
 novacore run
 ```
 
 Jika `novacore` belum terbaca oleh shell:
 
 ```bash
-echo 'export PATH="$(go env GOPATH)/bin:$PATH"' >> ~/.zshrc
+"$(go env GOPATH)/bin/novacore" setup
 source ~/.zshrc
 novacore version
 ```
 
-`go install` menyimpan binary ke `$(go env GOPATH)/bin`. Command `novacore` hanya bisa dipanggil dari mana saja jika folder tersebut sudah masuk `PATH`.
+`go install` menyimpan binary ke `$(go env GOPATH)/bin`. `novacore setup` mengambil `pwd` sebagai `NOVACORE_HOME`, lalu menambahkan Go bin directory ke `PATH` untuk user saat ini.
+
+OS yang didukung:
+
+| OS | File/profile yang diperbarui |
+| --- | --- |
+| macOS | `~/.zshrc`, `~/.bashrc`, atau `~/.profile` sesuai shell |
+| Linux | `~/.bashrc`, `~/.zshrc`, `~/.profile`, atau fish config |
+| Windows | PowerShell user profile |
 
 Alternatif tanpa mengubah `PATH`:
 
@@ -38,9 +47,18 @@ Update framework dari repository Git:
 novacore update
 ```
 
-Command ini mencari root project NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`.
+Command ini mencari root project NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`. Command ini bisa dijalankan dari folder repository atau dari direktori lain seperti `~`.
 
-Jika ingin menjalankan update dari luar folder repository, set `NOVACORE_HOME`:
+NovaCore akan otomatis mencari clone project di folder umum seperti `~/Developer`, `~/Projects`, `~/Project`, `~/Code`, dan `$(go env GOPATH)/src`.
+
+Jika sebelumnya kamu sudah install NovaCore versi lama yang belum punya auto-discovery, jalankan sekali dari folder repository:
+
+```bash
+go install ./cmd/novacore
+novacore setup
+```
+
+Jika project berada di lokasi lain, set `NOVACORE_HOME`:
 
 ```bash
 echo 'export NOVACORE_HOME="/path/to/novacore"' >> ~/.zshrc

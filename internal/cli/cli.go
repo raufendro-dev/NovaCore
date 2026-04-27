@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -24,13 +26,14 @@ const version = "0.1.0"
 const author = "Rauf Endro Widagdo aka raufendro"
 
 func Execute() {
-	root := &cobra.Command{Use: "novacore", Short: "NovaCore backend framework CLI"}
+	root := &cobra.Command{Use: "novacore", Short: "NovaCore backend framework CLI", SilenceUsage: true}
 	root.AddCommand(makeCommand())
 	root.AddCommand(colonMakeCommands()...)
 	root.AddCommand(updateCRUDCommand("update:crud"))
 	root.AddCommand(relationCommand("make:relation"))
 	root.AddCommand(updateCommand())
 	root.AddCommand(uninstallCommand())
+	root.AddCommand(setupCommand())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Show NovaCore version",
@@ -137,10 +140,110 @@ func findProjectRoot() (string, error) {
 
 	gitCmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	output, err := gitCmd.Output()
-	if err != nil {
+	if err == nil {
+		root := strings.TrimSpace(string(output))
+		if ensureNovaCoreRoot(root) == nil {
+			return root, nil
+		}
+	}
+
+	candidates := discoverProjectRoots()
+	if len(candidates) == 0 {
 		return "", fmt.Errorf("cannot find NovaCore project root; run this command inside the NovaCore repository or set NOVACORE_HOME")
 	}
-	return strings.TrimSpace(string(output)), nil
+	sortNovaCoreCandidates(candidates)
+	return candidates[0], nil
+}
+
+func discoverProjectRoots() []string {
+	roots := make([]string, 0)
+	seen := map[string]bool{}
+	for _, root := range searchRoots() {
+		filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if entry.IsDir() {
+				if shouldSkipDiscoveryDir(root, path, entry.Name()) {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if entry.Name() != "go.mod" {
+				return nil
+			}
+			dir := filepath.Dir(path)
+			if seen[dir] || ensureNovaCoreRoot(dir) != nil {
+				return nil
+			}
+			seen[dir] = true
+			roots = append(roots, dir)
+			return nil
+		})
+	}
+	return roots
+}
+
+func searchRoots() []string {
+	roots := make([]string, 0)
+	add := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return
+		}
+		if stat, err := os.Stat(path); err == nil && stat.IsDir() {
+			roots = append(roots, path)
+		}
+	}
+
+	home, _ := os.UserHomeDir()
+	add(filepath.Join(home, "Developer"))
+	add(filepath.Join(home, "Projects"))
+	add(filepath.Join(home, "Project"))
+	add(filepath.Join(home, "Code"))
+
+	if output, err := exec.Command("go", "env", "GOPATH").Output(); err == nil {
+		add(filepath.Join(strings.TrimSpace(string(output)), "src"))
+	}
+	return roots
+}
+
+func shouldSkipDiscoveryDir(root, path, name string) bool {
+	if path == root {
+		return false
+	}
+	if name == ".git" || name == "node_modules" || name == "vendor" || name == ".cache" {
+		return true
+	}
+	if strings.HasPrefix(name, ".") {
+		return true
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return len(strings.Split(rel, string(filepath.Separator))) > 6
+}
+
+func sortNovaCoreCandidates(candidates []string) {
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidateScore(candidates[i]) > candidateScore(candidates[j])
+	})
+}
+
+func candidateScore(path string) int {
+	base := strings.ToLower(filepath.Base(path))
+	score := 0
+	if base == "novacore" {
+		score += 100
+	}
+	if strings.Contains(base, "novacore") {
+		score += 50
+	}
+	if stat, err := os.Stat(filepath.Join(path, ".git")); err == nil && stat.IsDir() {
+		score += 10
+	}
+	return score
 }
 
 func ensureNovaCoreRoot(root string) error {
@@ -186,6 +289,140 @@ func removeInstalledBinary(out io.Writer) error {
 	}
 	fmt.Fprintf(out, "Removed old binary: %s\n", executable)
 	return nil
+}
+
+func setupCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "setup",
+		Short: "Configure NOVACORE_HOME and PATH for the current user",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			root, err = filepath.Abs(root)
+			if err != nil {
+				return err
+			}
+			if err := ensureNovaCoreRoot(root); err != nil {
+				return fmt.Errorf("run novacore setup from the NovaCore project root: %w", err)
+			}
+
+			goBin, err := goBinPath()
+			if err != nil {
+				return err
+			}
+
+			out := cmd.OutOrStdout()
+			switch runtime.GOOS {
+			case "windows":
+				if err := setupWindowsProfile(root, goBin); err != nil {
+					return err
+				}
+			default:
+				profile, err := setupUnixProfile(root, goBin)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(out, "Updated shell profile: %s\n", profile)
+			}
+
+			fmt.Fprintf(out, "NOVACORE_HOME : %s\n", root)
+			fmt.Fprintf(out, "Go bin path   : %s\n", goBin)
+			fmt.Fprintln(out, "NovaCore environment configured.")
+			fmt.Fprintln(out, "Restart your terminal or reload your shell profile before running novacore from a new directory.")
+			return nil
+		},
+	}
+}
+
+func goBinPath() (string, error) {
+	if gobin := strings.TrimSpace(os.Getenv("GOBIN")); gobin != "" {
+		return filepath.Abs(gobin)
+	}
+	output, err := exec.Command("go", "env", "GOPATH").Output()
+	if err != nil {
+		return "", fmt.Errorf("cannot read GOPATH with go env: %w", err)
+	}
+	gopath := strings.TrimSpace(string(output))
+	if gopath == "" {
+		return "", fmt.Errorf("go env GOPATH returned empty value")
+	}
+	return filepath.Join(gopath, "bin"), nil
+}
+
+func setupUnixProfile(root, goBin string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	shellName := filepath.Base(os.Getenv("SHELL"))
+	profile := filepath.Join(home, ".profile")
+	switch shellName {
+	case "zsh":
+		profile = filepath.Join(home, ".zshrc")
+	case "bash":
+		profile = filepath.Join(home, ".bashrc")
+	case "fish":
+		profile = filepath.Join(home, ".config", "fish", "config.fish")
+	}
+	block := unixEnvBlock(root, goBin, shellName == "fish")
+	return profile, writeManagedBlock(profile, block)
+}
+
+func setupWindowsProfile(root, goBin string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	profiles := []string{
+		filepath.Join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
+		filepath.Join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
+	}
+	block := windowsEnvBlock(root, goBin)
+	for _, profile := range profiles {
+		if err := writeManagedBlock(profile, block); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func unixEnvBlock(root, goBin string, fish bool) string {
+	if fish {
+		return fmt.Sprintf("set -gx NOVACORE_HOME %q\nfish_add_path %q\n", root, goBin)
+	}
+	return fmt.Sprintf("export NOVACORE_HOME=%q\ncase \":$PATH:\" in\n  *\":%s:\"*) ;;\n  *) export PATH=\"%s:$PATH\" ;;\nesac\n", root, goBin, goBin)
+}
+
+func windowsEnvBlock(root, goBin string) string {
+	return fmt.Sprintf("$env:NOVACORE_HOME = %q\n[Environment]::SetEnvironmentVariable('NOVACORE_HOME', %q, 'User')\n$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')\nif (($userPath -split ';') -notcontains %q) {\n  [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + %q), 'User')\n}\n", root, root, goBin, goBin)
+}
+
+func writeManagedBlock(path, block string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	contentBytes, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	content := string(contentBytes)
+	start := "# >>> NovaCore >>>"
+	end := "# <<< NovaCore <<<"
+	managed := start + "\n" + block + end + "\n"
+
+	if strings.Contains(content, start) && strings.Contains(content, end) {
+		before, rest, _ := strings.Cut(content, start)
+		_, after, _ := strings.Cut(rest, end)
+		content = strings.TrimRight(before, "\n") + "\n" + managed + strings.TrimLeft(after, "\n")
+	} else {
+		if strings.TrimSpace(content) != "" && !strings.HasSuffix(content, "\n") {
+			content += "\n"
+		}
+		content += "\n" + managed
+	}
+	return os.WriteFile(path, []byte(content), 0o644)
 }
 
 func uninstallCommand() *cobra.Command {
