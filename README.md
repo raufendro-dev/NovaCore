@@ -129,7 +129,7 @@ CRUD default protected dengan JWT:
 go run cmd/framework/main.go make:crud Product
 ```
 
-Sebelum generate, CLI akan menanyakan field yang ingin disimpan. Field default `id`, `created_at`, `updated_at`, dan `deleted_at` sudah otomatis tersedia dari `gorm.Model`, jadi tidak perlu dimasukkan.
+Sebelum generate, CLI akan menanyakan field yang ingin disimpan. Field default `id`, `created_at`, `updated_at`, dan `deleted_at` sudah otomatis tersedia dari `gorm.Model`, jadi tidak perlu dimasukkan. Tekan `Ctrl+D` pada prompt `Field name` untuk menyelesaikan pengisian field.
 
 Contoh input:
 
@@ -140,7 +140,7 @@ Required? [y/N]: y
 Field name: price
 Type [string]: float
 Required? [y/N]: n
-Field name:
+Field name: <Ctrl+D>
 ```
 
 Tipe field yang didukung:
@@ -178,6 +178,8 @@ Generator membuat:
 - Postman requests
 
 Field yang kamu masukkan akan ikut dibuat di model, DTO validation, service assignment, migration SQL, docs endpoint, dan Postman body example.
+
+Jika `Field name` kosong lalu ditekan `Enter`, CLI akan meminta input ulang. Gunakan `Ctrl+D` untuk selesai.
 
 Setelah generate:
 

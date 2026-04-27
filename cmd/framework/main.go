@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/raufendro/novacore/internal/config"
 	"github.com/raufendro/novacore/internal/database"
@@ -12,6 +14,7 @@ import (
 	"github.com/raufendro/novacore/internal/migration"
 	"github.com/raufendro/novacore/internal/seeder"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func main() {
@@ -158,18 +161,22 @@ func promptFields(cmd *cobra.Command, kind string) ([]generator.Field, error) {
 	reader := bufio.NewReader(cmd.InOrStdin())
 	fmt.Fprintln(cmd.OutOrStdout(), "Define fields for this CRUD. Default fields are already included: id, created_at, updated_at, deleted_at.")
 	fmt.Fprintln(cmd.OutOrStdout(), "Supported types: string, text, int, uint, float, bool, time.")
-	fmt.Fprintln(cmd.OutOrStdout(), "Press Enter on field name when finished.")
+	fmt.Fprintln(cmd.OutOrStdout(), "Press Ctrl+D on field name when finished.")
 
 	fields := []generator.Field{}
 	reserved := map[string]struct{}{"id": {}, "created_at": {}, "updated_at": {}, "deleted_at": {}}
 	for {
-		name, err := ask(reader, cmd, "Field name")
+		name, finish, err := askFieldName(reader, cmd)
 		if err != nil {
 			return nil, err
 		}
+		if finish {
+			break
+		}
 		name = strings.TrimSpace(name)
 		if name == "" {
-			break
+			fmt.Fprintln(cmd.OutOrStdout(), "Field name is required. Press Ctrl+D on field name when finished.")
+			continue
 		}
 		snake := toSnakeName(name)
 		if _, ok := reserved[snake]; ok {
@@ -196,6 +203,84 @@ func promptFields(cmd *cobra.Command, kind string) ([]generator.Field, error) {
 		fields = append(fields, field)
 	}
 	return fields, nil
+}
+
+func askFieldName(reader *bufio.Reader, cmd *cobra.Command) (string, bool, error) {
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		return askFieldNameRaw(cmd)
+	}
+	fmt.Fprint(cmd.OutOrStdout(), "Field name: ")
+	value, err := reader.ReadString('\n')
+	if err != nil {
+		if err == io.EOF && strings.TrimSpace(value) == "" {
+			return "", true, nil
+		}
+		if err == io.EOF {
+			return strings.TrimSpace(value), false, nil
+		}
+		return "", false, err
+	}
+	return strings.TrimSpace(value), false, nil
+}
+
+func askFieldNameRaw(cmd *cobra.Command) (string, bool, error) {
+	fmt.Fprint(cmd.OutOrStdout(), "Field name: ")
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		return "", false, err
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+	var builder strings.Builder
+	buffer := make([]byte, 1)
+	for {
+		_, err := os.Stdin.Read(buffer)
+		if err != nil {
+			return "", false, err
+		}
+		ch := buffer[0]
+		switch ch {
+		case 0x04:
+			fmt.Fprintln(cmd.OutOrStdout())
+			return "", true, nil
+		case '\r', '\n':
+			fmt.Fprintln(cmd.OutOrStdout())
+			return builder.String(), false, nil
+		case 0x7f, '\b':
+			if builder.Len() > 0 {
+				value := []rune(builder.String())
+				builder.Reset()
+				builder.WriteString(string(value[:len(value)-1]))
+				fmt.Fprint(cmd.OutOrStdout(), "\b \b")
+			}
+		case 0x1b:
+			_ = readEscapeSequence()
+		default:
+			r := rune(ch)
+			if unicode.IsPrint(r) {
+				builder.WriteByte(ch)
+				fmt.Fprintf(cmd.OutOrStdout(), "%c", ch)
+			}
+		}
+	}
+}
+
+func readEscapeSequence() string {
+	buffer := make([]byte, 1)
+	var builder strings.Builder
+	builder.WriteByte(0x1b)
+	for i := 0; i < 16; i++ {
+		_, err := os.Stdin.Read(buffer)
+		if err != nil {
+			break
+		}
+		builder.WriteByte(buffer[0])
+		ch := buffer[0]
+		if (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '~' {
+			break
+		}
+	}
+	return builder.String()
 }
 
 func ask(reader *bufio.Reader, cmd *cobra.Command, label string) (string, error) {
