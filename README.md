@@ -137,6 +137,16 @@ Update project framework dari repository Git:
 novacore update
 ```
 
+`novacore update` akan mencari folder root project NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`.
+
+Jika command dipanggil dari luar folder repository, set lokasi project dengan `NOVACORE_HOME`:
+
+```bash
+echo 'export NOVACORE_HOME="/path/to/novacore"' >> ~/.zshrc
+source ~/.zshrc
+novacore update
+```
+
 Uninstall binary CLI NovaCore:
 
 ```bash
@@ -151,7 +161,7 @@ novacore uninstall
 | --- | --- |
 | `novacore run` | Menjalankan HTTP server |
 | `novacore version` | Menampilkan versi, author, repository, dan license |
-| `novacore update` | Menjalankan `git pull` pada direktori project aktif |
+| `novacore update` | Menjalankan `git pull`, uninstall binary lama, lalu install CLI terbaru |
 | `novacore uninstall` | Menghapus binary CLI NovaCore |
 | `novacore make:module User` | Generate module |
 | `novacore make:model Product` | Generate model |

@@ -19,7 +19,7 @@ novacore uninstall
 
 `make:crud` membuat model, DTO, repository, service, handler, routes, migration, test, docs endpoint, dan Postman request.
 
-`version` menampilkan versi CLI dan informasi author. `update` menjalankan `git pull` di direktori project aktif. `uninstall` menghapus binary `novacore` yang sedang dijalankan, dan akan menolak jika dipanggil lewat `go run`.
+`version` menampilkan versi CLI dan informasi author. `update` mencari root project NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`. `uninstall` menghapus binary `novacore` yang sedang dijalankan, dan akan menolak jika dipanggil lewat `go run`.
 
 Saat menjalankan `make:crud`, CLI akan menanyakan metode endpoint yang ingin dibuat, lalu field yang ingin disimpan. Field default `id`, `created_at`, `updated_at`, dan `deleted_at` sudah disediakan otomatis oleh `gorm.Model`. Tekan `Ctrl+D` pada prompt `Field name` untuk selesai.
 

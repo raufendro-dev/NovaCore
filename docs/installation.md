@@ -38,7 +38,15 @@ Update framework dari repository Git:
 novacore update
 ```
 
-Command ini menjalankan `git pull` di direktori project yang sedang aktif.
+Command ini mencari root project NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`.
+
+Jika ingin menjalankan update dari luar folder repository, set `NOVACORE_HOME`:
+
+```bash
+echo 'export NOVACORE_HOME="/path/to/novacore"' >> ~/.zshrc
+source ~/.zshrc
+novacore update
+```
 
 Uninstall CLI:
 

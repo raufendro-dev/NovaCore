@@ -93,15 +93,99 @@ func Execute() {
 func updateCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "update",
-		Short: "Update NovaCore project with git pull",
+		Short: "Update NovaCore project and reinstall CLI",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			gitCmd := exec.Command("git", "pull")
-			gitCmd.Stdout = cmd.OutOrStdout()
-			gitCmd.Stderr = cmd.ErrOrStderr()
-			gitCmd.Stdin = cmd.InOrStdin()
-			return gitCmd.Run()
+			root, err := findProjectRoot()
+			if err != nil {
+				return err
+			}
+			if err := ensureNovaCoreRoot(root); err != nil {
+				return err
+			}
+
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "NovaCore project : %s\n", root)
+			fmt.Fprintln(out, "Updating source with git pull...")
+			if err := runInDir(cmd, root, "git", "pull"); err != nil {
+				return err
+			}
+
+			fmt.Fprintln(out, "Removing old NovaCore CLI binary...")
+			if err := removeInstalledBinary(out); err != nil {
+				return err
+			}
+
+			fmt.Fprintln(out, "Installing latest NovaCore CLI...")
+			if err := runInDir(cmd, root, "go", "install", "./cmd/novacore"); err != nil {
+				return err
+			}
+
+			fmt.Fprintln(out, "NovaCore update completed.")
+			return nil
 		},
 	}
+}
+
+func findProjectRoot() (string, error) {
+	if home := strings.TrimSpace(os.Getenv("NOVACORE_HOME")); home != "" {
+		abs, err := filepath.Abs(home)
+		if err != nil {
+			return "", err
+		}
+		return abs, nil
+	}
+
+	gitCmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	output, err := gitCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("cannot find NovaCore project root; run this command inside the NovaCore repository or set NOVACORE_HOME")
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func ensureNovaCoreRoot(root string) error {
+	goMod := filepath.Join(root, "go.mod")
+	content, err := os.ReadFile(goMod)
+	if err != nil {
+		return fmt.Errorf("cannot read %s: %w", goMod, err)
+	}
+	if !strings.Contains(string(content), "module github.com/raufendro/novacore") {
+		return fmt.Errorf("%s is not a NovaCore project root", root)
+	}
+	return nil
+}
+
+func runInDir(cmd *cobra.Command, dir, name string, args ...string) error {
+	runCmd := exec.Command(name, args...)
+	runCmd.Dir = dir
+	runCmd.Stdout = cmd.OutOrStdout()
+	runCmd.Stderr = cmd.ErrOrStderr()
+	runCmd.Stdin = cmd.InOrStdin()
+	return runCmd.Run()
+}
+
+func removeInstalledBinary(out io.Writer) error {
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		return err
+	}
+	if isGoRunBinary(executable) {
+		fmt.Fprintln(out, "Skipped uninstall because NovaCore is running from go run temporary binary.")
+		return nil
+	}
+	if filepath.Base(executable) != "novacore" {
+		fmt.Fprintf(out, "Skipped uninstall because current binary is not named novacore: %s\n", executable)
+		return nil
+	}
+	if err := os.Remove(executable); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Removed old binary: %s\n", executable)
+	return nil
 }
 
 func uninstallCommand() *cobra.Command {
@@ -123,10 +207,9 @@ func uninstallCommand() *cobra.Command {
 			if filepath.Base(executable) != "novacore" {
 				return fmt.Errorf("refusing to remove %s because it is not named novacore", executable)
 			}
-			if err := os.Remove(executable); err != nil {
+			if err := removeInstalledBinary(cmd.OutOrStdout()); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "NovaCore CLI removed from %s\n", executable)
 			return nil
 		},
 	}
