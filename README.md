@@ -64,7 +64,7 @@ NovaCore memakai library yang stabil dan umum dipakai di ekosistem Go:
 ## Quick Start
 
 ```bash
-git clone <repository-url> novacore
+git clone https://github.com/raufendro-dev/NovaCore
 cd novacore
 cp .env.example .env
 go mod tidy
