@@ -50,3 +50,29 @@ go run cmd/framework/main.go make:crud Article --public
 ```
 
 Flag `--public` juga tersedia untuk `make:module` dan `make:endpoint`.
+
+## Update CRUD
+
+Jika ada field atau tipe data yang terlewat setelah CRUD dibuat, gunakan:
+
+```bash
+go run cmd/framework/main.go update:crud Product
+```
+
+Atau:
+
+```bash
+go run cmd/framework/main.go make update-crud Product
+```
+
+CLI akan meminta konfirmasi karena migration yang dibuat akan menghapus dan membuat ulang table:
+
+```text
+Updating CRUD columns will create a reset migration.
+Existing table data will be deleted and IDs will restart from 0 after the migration is run.
+Continue? [y/N]:
+```
+
+Jawab `y` atau `Y` untuk lanjut. Jawab `n`, `N`, atau kosong untuk batal.
+
+Setelah itu CLI akan menanyakan ulang metode endpoint dan field. Generator memperbarui model, DTO, service, repository, handler, routes, test, migration, docs endpoint, dan Postman request.

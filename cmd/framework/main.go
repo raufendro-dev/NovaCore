@@ -21,6 +21,7 @@ func main() {
 	root := &cobra.Command{Use: "novacore", Short: "NovaCore backend framework CLI"}
 	root.AddCommand(makeCommand())
 	root.AddCommand(colonMakeCommands()...)
+	root.AddCommand(updateCRUDCommand("update:crud"))
 	root.AddCommand(&cobra.Command{
 		Use:   "migrate",
 		Short: "Run SQL migrations",
@@ -112,6 +113,37 @@ func colonMakeCommands() []*cobra.Command {
 	return commands
 }
 
+func updateCRUDCommand(use string) *cobra.Command {
+	public := false
+	command := &cobra.Command{
+		Use:   use + " [Name]",
+		Short: "Update generated CRUD fields, routes, docs, Postman, and reset migration",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			reader := bufio.NewReader(cmd.InOrStdin())
+			ok, err := confirmDestructiveCRUDUpdate(reader, cmd)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				fmt.Fprintln(cmd.OutOrStdout(), "CRUD update cancelled.")
+				return nil
+			}
+			methods, err := promptMethods(reader, cmd, "crud")
+			if err != nil {
+				return err
+			}
+			fields, err := promptFields(reader, cmd, "crud")
+			if err != nil {
+				return err
+			}
+			return generator.UpdateCRUD(args[0], generator.Options{Public: public, Fields: fields, Methods: methods})
+		},
+	}
+	command.Flags().BoolVar(&public, "public", false, "generate routes without JWT auth middleware")
+	return command
+}
+
 func makeCommand() *cobra.Command {
 	make := &cobra.Command{Use: "make", Short: "Generate framework files"}
 	add := func(use, kind string) {
@@ -145,6 +177,7 @@ func makeCommand() *cobra.Command {
 	add("repository", "repository")
 	add("endpoint", "endpoint")
 	add("crud", "crud")
+	make.AddCommand(updateCRUDCommand("update-crud"))
 	make.AddCommand(&cobra.Command{
 		Use:   "migration [name]",
 		Short: "Generate SQL migration",
@@ -162,6 +195,25 @@ func makeCommand() *cobra.Command {
 		},
 	})
 	return make
+}
+
+func confirmDestructiveCRUDUpdate(reader *bufio.Reader, cmd *cobra.Command) (bool, error) {
+	fmt.Fprintln(cmd.OutOrStdout(), "Updating CRUD columns will create a reset migration.")
+	fmt.Fprintln(cmd.OutOrStdout(), "Existing table data will be deleted and IDs will restart from 0 after the migration is run.")
+	for {
+		answer, err := ask(reader, cmd, "Continue? [y/N]")
+		if err != nil {
+			return false, err
+		}
+		switch strings.ToLower(strings.TrimSpace(answer)) {
+		case "y":
+			return true, nil
+		case "n", "":
+			return false, nil
+		default:
+			fmt.Fprintln(cmd.OutOrStdout(), "Please answer y/Y or n/N.")
+		}
+	}
 }
 
 func promptMethods(reader *bufio.Reader, cmd *cobra.Command, kind string) ([]string, error) {

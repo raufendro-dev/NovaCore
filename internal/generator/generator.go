@@ -63,19 +63,7 @@ func Generate(kind, name string) error {
 }
 
 func GenerateWithOptions(kind, name string, opts Options) error {
-	v := makeView(name)
-	v.Public = opts.Public
-	v.Fields = normalizeFields(opts.Fields)
-	v.Methods = normalizeMethods(opts.Methods, v.PluralPath)
-	v.HasGET = hasMethod(v.Methods, "GET")
-	v.HasPOST = hasMethod(v.Methods, "POST")
-	v.HasPUT = hasMethod(v.Methods, "PUT")
-	v.HasPATCH = hasMethod(v.Methods, "PATCH")
-	v.HasDELETE = hasMethod(v.Methods, "DELETE")
-	v.NeedsTime = needsTime(v.Fields)
-	if len(v.Fields) > 0 {
-		v.FirstField = &v.Fields[0]
-	}
+	v := viewFromOptions(name, opts)
 	if kind == "crud" || kind == "module" {
 		if err := os.MkdirAll(moduleDir(v), 0o755); err != nil {
 			return err
@@ -89,27 +77,59 @@ func GenerateWithOptions(kind, name string, opts Options) error {
 		"endpoint":   writeRoutes,
 	}
 	if kind == "crud" || kind == "module" {
-		for _, fn := range []func(View) error{writeModel, writeDTO, writeRepository, writeService, writeHandler, writeRoutes, writeTest} {
-			if err := fn(v); err != nil {
-				return err
-			}
-		}
-		if err := GenerateMigrationForView(v); err != nil {
+		if err := writeCRUD(v); err != nil {
 			return err
 		}
-		if err := updateRouteRegistry(v); err != nil {
-			return err
-		}
-		if err := UpsertPostman(v); err != nil {
-			return err
-		}
-		return writeEndpointDoc(v)
+		return GenerateMigrationForView(v)
 	}
 	fn, ok := steps[kind]
 	if !ok {
 		return fmt.Errorf("unknown generator kind %q", kind)
 	}
 	return fn(v)
+}
+
+func UpdateCRUD(name string, opts Options) error {
+	v := viewFromOptions(name, opts)
+	if _, err := os.Stat(moduleDir(v)); err != nil {
+		return fmt.Errorf("module %s does not exist; run make:crud %s first", v.Snake, v.Name)
+	}
+	if err := writeCRUD(v); err != nil {
+		return err
+	}
+	return GenerateResetMigrationForView(v)
+}
+
+func viewFromOptions(name string, opts Options) View {
+	v := makeView(name)
+	v.Public = opts.Public
+	v.Fields = normalizeFields(opts.Fields)
+	v.Methods = normalizeMethods(opts.Methods, v.PluralPath)
+	v.HasGET = hasMethod(v.Methods, "GET")
+	v.HasPOST = hasMethod(v.Methods, "POST")
+	v.HasPUT = hasMethod(v.Methods, "PUT")
+	v.HasPATCH = hasMethod(v.Methods, "PATCH")
+	v.HasDELETE = hasMethod(v.Methods, "DELETE")
+	v.NeedsTime = needsTime(v.Fields)
+	if len(v.Fields) > 0 {
+		v.FirstField = &v.Fields[0]
+	}
+	return v
+}
+
+func writeCRUD(v View) error {
+	for _, fn := range []func(View) error{writeModel, writeDTO, writeRepository, writeService, writeHandler, writeRoutes, writeTest} {
+		if err := fn(v); err != nil {
+			return err
+		}
+	}
+	if err := updateRouteRegistry(v); err != nil {
+		return err
+	}
+	if err := UpsertPostman(v); err != nil {
+		return err
+	}
+	return writeEndpointDoc(v)
 }
 
 func GenerateMigration(name string) error {
@@ -138,6 +158,20 @@ func GenerateMigrationForView(v View) error {
 	stamp := time.Now().UTC().Format("20060102150405")
 	base := filepath.Join("migrations", stamp+"_create_"+v.Plural+"_table")
 	up := buildCreateTableSQL(v)
+	down := fmt.Sprintf("DROP TABLE IF EXISTS %s;\n", v.Plural)
+	if err := os.WriteFile(base+".up.sql", []byte(up), 0o644); err != nil {
+		return err
+	}
+	return os.WriteFile(base+".down.sql", []byte(down), 0o644)
+}
+
+func GenerateResetMigrationForView(v View) error {
+	if err := os.MkdirAll("migrations", 0o755); err != nil {
+		return err
+	}
+	stamp := time.Now().UTC().Format("20060102150405")
+	base := filepath.Join("migrations", stamp+"_reset_"+v.Plural+"_table")
+	up := fmt.Sprintf("DROP TABLE IF EXISTS %s;\n%s", v.Plural, buildCreateTableSQL(v))
 	down := fmt.Sprintf("DROP TABLE IF EXISTS %s;\n", v.Plural)
 	if err := os.WriteFile(base+".up.sql", []byte(up), 0o644); err != nil {
 		return err

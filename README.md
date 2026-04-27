@@ -209,6 +209,34 @@ go run cmd/framework/main.go make:crud Article --public
 
 Route yang dibuat tidak memakai JWT middleware.
 
+## Update CRUD
+
+Jika setelah membuat CRUD ada field atau tipe data yang terlewat, gunakan:
+
+```bash
+go run cmd/framework/main.go update:crud Product
+```
+
+Alias lain:
+
+```bash
+go run cmd/framework/main.go make update-crud Product
+```
+
+Command ini akan menanyakan konfirmasi terlebih dahulu:
+
+```text
+Updating CRUD columns will create a reset migration.
+Existing table data will be deleted and IDs will restart from 0 after the migration is run.
+Continue? [y/N]:
+```
+
+Jawab `y` atau `Y` untuk lanjut. Jawab `n`, `N`, atau kosong untuk membatalkan.
+
+Setelah dikonfirmasi, CLI akan menanyakan ulang metode endpoint dan field. NovaCore lalu memperbarui model, DTO validation, repository, service, handler, routes API, test, migration reset table, dokumentasi endpoint, dan Postman request.
+
+Migration update yang dibuat bersifat destructive karena menjalankan `DROP TABLE` lalu membuat ulang table. Jalankan migration ini hanya jika kamu siap kehilangan data tabel tersebut.
+
 ## Command Generator
 
 ```bash
@@ -219,6 +247,7 @@ go run cmd/framework/main.go make:service Product
 go run cmd/framework/main.go make:repository Product
 go run cmd/framework/main.go make:endpoint Product
 go run cmd/framework/main.go make:crud Product
+go run cmd/framework/main.go update:crud Product
 go run cmd/framework/main.go make:migration create_products_table
 ```
 

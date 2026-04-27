@@ -67,6 +67,8 @@ File `.up.sql` dijalankan saat migration. NovaCore mencatat file yang sudah dija
 
 Untuk CRUD generated, kolom migration mengikuti field yang kamu isi saat prompt `make:crud`.
 
+Jika menggunakan `update:crud`, NovaCore membuat migration reset table yang menjalankan `DROP TABLE` lalu membuat table ulang. Data lama akan hilang dan ID akan mulai dari awal setelah migration dijalankan. Gunakan hanya ketika perubahan schema memang boleh menghapus data.
+
 ## Seeder
 
 Seeder adalah file SQL untuk mengisi data awal seperti admin pertama, role default, permission default, atau data referensi.
