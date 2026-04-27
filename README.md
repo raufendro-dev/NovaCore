@@ -45,6 +45,21 @@ go install ./cmd/novacore
 novacore run
 ```
 
+Jika setelah `go install` muncul `zsh: command not found: novacore`, tambahkan folder binary Go ke `PATH`:
+
+```bash
+echo 'export PATH="$(go env GOPATH)/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+novacore version
+```
+
+Untuk cek lokasi binary hasil install:
+
+```bash
+go env GOPATH
+ls "$(go env GOPATH)/bin/novacore"
+```
+
 Server berjalan di:
 
 ```text
@@ -79,7 +94,7 @@ novacore uninstall
 
 Command ini menghapus binary `novacore` yang sedang dijalankan. Jika kamu menjalankan via `go run`, uninstall akan ditolak karena binary tersebut hanya file sementara Go.
 
-Jika `$GOPATH/bin` belum ada di `PATH`, kamu juga bisa build lokal:
+Jika tidak ingin mengubah `PATH`, kamu juga bisa build lokal dan menjalankannya lewat path file:
 
 ```bash
 go build -o bin/novacore cmd/novacore/main.go
