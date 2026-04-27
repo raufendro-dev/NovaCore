@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -18,12 +20,25 @@ import (
 	"golang.org/x/term"
 )
 
+const version = "0.1.0"
+
 func Execute() {
 	root := &cobra.Command{Use: "novacore", Short: "NovaCore backend framework CLI"}
 	root.AddCommand(makeCommand())
 	root.AddCommand(colonMakeCommands()...)
 	root.AddCommand(updateCRUDCommand("update:crud"))
 	root.AddCommand(relationCommand("make:relation"))
+	root.AddCommand(updateCommand())
+	root.AddCommand(uninstallCommand())
+	root.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Show NovaCore version",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Fprintf(cmd.OutOrStdout(), "NovaCore %s\n", version)
+			fmt.Fprintln(cmd.OutOrStdout(), "Created by Rauf Endro Widagdo aka raufendro")
+			fmt.Fprintln(cmd.OutOrStdout(), "Terima kasih sudah menggunakan NovaCore. Semangat coding dan bangun backend yang rapi!")
+		},
+	})
 	root.AddCommand(&cobra.Command{
 		Use:   "run",
 		Short: "Run NovaCore HTTP server",
@@ -65,6 +80,55 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func updateCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "update",
+		Short: "Update NovaCore project with git pull",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			gitCmd := exec.Command("git", "pull")
+			gitCmd.Stdout = cmd.OutOrStdout()
+			gitCmd.Stderr = cmd.ErrOrStderr()
+			gitCmd.Stdin = cmd.InOrStdin()
+			return gitCmd.Run()
+		},
+	}
+}
+
+func uninstallCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove installed NovaCore CLI binary",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			executable, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			executable, err = filepath.EvalSymlinks(executable)
+			if err != nil {
+				return err
+			}
+			if isGoRunBinary(executable) {
+				return fmt.Errorf("novacore uninstall must be run from an installed binary, not go run")
+			}
+			if filepath.Base(executable) != "novacore" {
+				return fmt.Errorf("refusing to remove %s because it is not named novacore", executable)
+			}
+			if err := os.Remove(executable); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "NovaCore CLI removed from %s\n", executable)
+			return nil
+		},
+	}
+}
+
+func isGoRunBinary(path string) bool {
+	clean := filepath.Clean(path)
+	return strings.Contains(clean, string(filepath.Separator)+"go-build") ||
+		strings.Contains(clean, string(filepath.Separator)+"go-build-") ||
+		strings.Contains(clean, string(filepath.Separator)+"go-build"+string(filepath.Separator))
 }
 
 func colonMakeCommands() []*cobra.Command {

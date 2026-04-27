@@ -57,6 +57,28 @@ Health check:
 GET /api/v1/health
 ```
 
+Lihat versi NovaCore:
+
+```bash
+novacore version
+```
+
+Update project framework dari repository Git:
+
+```bash
+novacore update
+```
+
+Command ini menjalankan `git pull` di direktori project NovaCore yang sedang aktif.
+
+Uninstall binary CLI NovaCore:
+
+```bash
+novacore uninstall
+```
+
+Command ini menghapus binary `novacore` yang sedang dijalankan. Jika kamu menjalankan via `go run`, uninstall akan ditolak karena binary tersebut hanya file sementara Go.
+
 Jika `$GOPATH/bin` belum ada di `PATH`, kamu juga bisa build lokal:
 
 ```bash
@@ -309,6 +331,12 @@ novacore make:crud Product
 novacore update:crud Product
 novacore make:relation Product Category --type=belongs-to
 novacore make:migration create_products_table
+novacore migrate
+novacore seed
+novacore run
+novacore version
+novacore update
+novacore uninstall
 ```
 
 Flag `--public` tersedia untuk:
