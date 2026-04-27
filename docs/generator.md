@@ -3,6 +3,7 @@
 Command:
 
 ```bash
+novacore create api-umkm
 novacore make:module User
 novacore make:model Product
 novacore make:controller Product
@@ -17,6 +18,8 @@ novacore version
 novacore update
 novacore uninstall
 ```
+
+`create` membuat project baru dari template NovaCore di direktori aktif. Default module Go diambil dari nama folder project, dan bisa diubah dengan `--module`.
 
 `make:crud` membuat model, DTO, repository, service, handler, routes, migration, test, docs endpoint, dan Postman request.
 

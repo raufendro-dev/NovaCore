@@ -24,6 +24,7 @@ import (
 
 const version = "0.1.0"
 const author = "Rauf Endro Widagdo aka raufendro"
+const novaCoreModule = "github.com/raufendro/novacore"
 
 func Execute() {
 	root := &cobra.Command{Use: "novacore", Short: "NovaCore backend framework CLI", SilenceUsage: true}
@@ -34,6 +35,7 @@ func Execute() {
 	root.AddCommand(updateCommand())
 	root.AddCommand(uninstallCommand())
 	root.AddCommand(setupCommand())
+	root.AddCommand(createCommand())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Show NovaCore version",
@@ -43,7 +45,7 @@ func Execute() {
 			fmt.Fprintf(out, "Version     : %s\n", version)
 			fmt.Fprintf(out, "Framework   : Production-ready Go REST API framework\n")
 			fmt.Fprintf(out, "Author      : %s\n", author)
-			fmt.Fprintf(out, "Repository  : github.com/raufendro/novacore\n")
+			fmt.Fprintf(out, "Repository  : %s\n", novaCoreModule)
 			fmt.Fprintf(out, "License     : MIT\n")
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "Terima kasih sudah menggunakan NovaCore.")
@@ -252,7 +254,7 @@ func ensureNovaCoreRoot(root string) error {
 	if err != nil {
 		return fmt.Errorf("cannot read %s: %w", goMod, err)
 	}
-	if !strings.Contains(string(content), "module github.com/raufendro/novacore") {
+	if !strings.Contains(string(content), "module "+novaCoreModule) {
 		return fmt.Errorf("%s is not a NovaCore project root", root)
 	}
 	return nil
@@ -334,6 +336,200 @@ func setupCommand() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func createCommand() *cobra.Command {
+	modulePath := ""
+	command := &cobra.Command{
+		Use:   "create [project-name]",
+		Short: "Create a new project from the NovaCore framework template",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			projectName := strings.TrimSpace(args[0])
+			if err := validateProjectName(projectName); err != nil {
+				return err
+			}
+			sourceRoot, err := findProjectRoot()
+			if err != nil {
+				return fmt.Errorf("cannot find NovaCore template source: %w", err)
+			}
+			if err := ensureNovaCoreRoot(sourceRoot); err != nil {
+				return err
+			}
+			targetRoot, err := filepath.Abs(projectName)
+			if err != nil {
+				return err
+			}
+			if err := ensureCreatableTarget(targetRoot); err != nil {
+				return err
+			}
+			module := strings.TrimSpace(modulePath)
+			if module == "" {
+				module = sanitizeModulePath(filepath.Base(targetRoot))
+			}
+			if module == "" {
+				return fmt.Errorf("module path cannot be empty")
+			}
+
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Creating NovaCore project: %s\n", targetRoot)
+			fmt.Fprintf(out, "Template source         : %s\n", sourceRoot)
+			fmt.Fprintf(out, "Module path             : %s\n", module)
+
+			if err := copyProjectTemplate(sourceRoot, targetRoot, module); err != nil {
+				return err
+			}
+			if err := createEnvFile(targetRoot); err != nil {
+				return err
+			}
+
+			fmt.Fprintln(out, "Project created successfully.")
+			fmt.Fprintln(out)
+			fmt.Fprintln(out, "Next steps:")
+			fmt.Fprintf(out, "  cd %s\n", projectName)
+			fmt.Fprintln(out, "  go mod tidy")
+			fmt.Fprintln(out, "  novacore setup")
+			fmt.Fprintln(out, "  novacore run")
+			return nil
+		},
+	}
+	command.Flags().StringVar(&modulePath, "module", "", "Go module path for the new project")
+	return command
+}
+
+func validateProjectName(name string) error {
+	if name == "" || name == "." || name == ".." {
+		return fmt.Errorf("project name is required")
+	}
+	if filepath.IsAbs(name) {
+		return fmt.Errorf("project name must be relative to the current directory")
+	}
+	clean := filepath.Clean(name)
+	if strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("project name cannot point outside the current directory")
+	}
+	return nil
+}
+
+func ensureCreatableTarget(target string) error {
+	stat, err := os.Stat(target)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !stat.IsDir() {
+		return fmt.Errorf("%s already exists and is not a directory", target)
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		return err
+	}
+	if len(entries) > 0 {
+		return fmt.Errorf("%s already exists and is not empty", target)
+	}
+	return nil
+}
+
+func sanitizeModulePath(name string) string {
+	name = strings.TrimSpace(strings.ToLower(name))
+	var builder strings.Builder
+	lastDash := false
+	for _, r := range name {
+		valid := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '/' || r == '_' || r == '-' || r == '.'
+		if valid {
+			builder.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			builder.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(builder.String(), "-./")
+}
+
+func copyProjectTemplate(sourceRoot, targetRoot, modulePath string) error {
+	return filepath.WalkDir(sourceRoot, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(sourceRoot, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return os.MkdirAll(targetRoot, 0o755)
+		}
+		if shouldSkipTemplatePath(rel, entry) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		targetPath := filepath.Join(targetRoot, rel)
+		if entry.IsDir() {
+			return os.MkdirAll(targetPath, 0o755)
+		}
+		return copyTemplateFile(path, targetPath, modulePath)
+	})
+}
+
+func shouldSkipTemplatePath(rel string, entry os.DirEntry) bool {
+	name := entry.Name()
+	if name == ".git" || name == ".cache" || name == "bin" || name == "vendor" || name == "node_modules" {
+		return true
+	}
+	if name == ".DS_Store" || name == ".env" || name == ".rencana_update" {
+		return true
+	}
+	if strings.HasPrefix(rel, "database"+string(filepath.Separator)) && strings.HasSuffix(name, ".db") {
+		return true
+	}
+	return false
+}
+
+func copyTemplateFile(sourcePath, targetPath, modulePath string) error {
+	content, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return err
+	}
+	if shouldRewriteTemplateFile(sourcePath) {
+		content = []byte(strings.ReplaceAll(string(content), novaCoreModule, modulePath))
+	}
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return err
+	}
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(targetPath, content, info.Mode().Perm())
+}
+
+func shouldRewriteTemplateFile(path string) bool {
+	switch filepath.Ext(path) {
+	case ".go", ".mod", ".md", ".json", ".yml", ".yaml":
+		return true
+	default:
+		return false
+	}
+}
+
+func createEnvFile(targetRoot string) error {
+	example := filepath.Join(targetRoot, ".env.example")
+	target := filepath.Join(targetRoot, ".env")
+	if _, err := os.Stat(target); err == nil {
+		return nil
+	}
+	content, err := os.ReadFile(example)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(target, content, 0o644)
 }
 
 func goBinPath() (string, error) {

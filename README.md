@@ -10,6 +10,7 @@ NovaCore dibuat supaya developer junior bisa memahami struktur backend yang rapi
 - [Tech Stack](#tech-stack)
 - [Quick Start](#quick-start)
 - [Instalasi CLI](#instalasi-cli)
+- [Create Project](#create-project)
 - [Command Reference](#command-reference)
 - [Konfigurasi](#konfigurasi)
 - [Authentication](#authentication)
@@ -62,6 +63,18 @@ NovaCore memakai library yang stabil dan umum dipakai di ekosistem Go:
 | Validation | `validator/v10` |
 
 ## Quick Start
+
+Membuat project baru dari mana saja:
+
+```bash
+novacore create api-umkm
+cd api-umkm
+go mod tidy
+novacore setup
+novacore run
+```
+
+Jika sedang mengembangkan source framework NovaCore langsung:
 
 ```bash
 git clone https://github.com/raufendro-dev/NovaCore
@@ -183,10 +196,51 @@ novacore uninstall
 
 `novacore uninstall` menghapus binary `novacore` yang sedang dijalankan. Jika command dijalankan via `go run`, uninstall akan ditolak karena binary tersebut hanya file sementara Go.
 
+## Create Project
+
+Buat project backend baru dari template NovaCore:
+
+```bash
+novacore create nama-project
+```
+
+Contoh:
+
+```bash
+novacore create api-umkm
+cd api-umkm
+go mod tidy
+novacore setup
+novacore run
+```
+
+Command ini bisa dijalankan dari direktori mana pun. NovaCore akan mencari source template dari `NOVACORE_HOME` atau folder clone NovaCore yang terdeteksi otomatis.
+
+Secara default module Go diambil dari nama folder project. Contoh `novacore create api-umkm` menghasilkan:
+
+```go
+module api-umkm
+```
+
+Jika ingin memakai module path sendiri:
+
+```bash
+novacore create api-umkm --module github.com/raufendro/api-umkm
+```
+
+Yang dilakukan oleh `create`:
+
+- Membuat folder project baru
+- Copy isi framework NovaCore
+- Rewrite `go.mod` dan import internal ke module project baru
+- Membuat `.env` dari `.env.example`
+- Mengecualikan file lokal seperti `.git`, `.env`, `.cache`, `bin`, dan file database lokal
+
 ## Command Reference
 
 | Command | Fungsi |
 | --- | --- |
+| `novacore create api-umkm` | Membuat project backend baru dari template NovaCore |
 | `novacore run` | Menjalankan HTTP server |
 | `novacore setup` | Set `NOVACORE_HOME` dari `pwd` dan menambahkan Go bin ke `PATH` |
 | `novacore version` | Menampilkan versi, author, repository, dan license |
