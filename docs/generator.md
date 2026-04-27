@@ -16,11 +16,12 @@ go run cmd/framework/main.go make:seeder create_admin_user
 
 `make:crud` membuat model, DTO, repository, service, handler, routes, migration, test, docs endpoint, dan Postman request.
 
-Saat menjalankan `make:crud`, CLI akan menanyakan field yang ingin disimpan. Field default `id`, `created_at`, `updated_at`, dan `deleted_at` sudah disediakan otomatis oleh `gorm.Model`. Tekan `Ctrl+D` pada prompt `Field name` untuk selesai.
+Saat menjalankan `make:crud`, CLI akan menanyakan metode endpoint yang ingin dibuat, lalu field yang ingin disimpan. Field default `id`, `created_at`, `updated_at`, dan `deleted_at` sudah disediakan otomatis oleh `gorm.Model`. Tekan `Ctrl+D` pada prompt `Field name` untuk selesai.
 
 Contoh:
 
 ```text
+Methods [GET, POST, PUT, PATCH, DELETE]: POST, GET, DELETE
 Field name: name
 Type [string]: string
 Required? [y/N]: y
@@ -31,6 +32,8 @@ Field name: <Ctrl+D>
 ```
 
 Tipe yang didukung: `string`, `text`, `int`, `uint`, `float`, `bool`, `time`.
+
+Metode yang didukung: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`. `GET` menghasilkan route list dan detail.
 
 Jika `Field name` kosong lalu ditekan `Enter`, CLI akan meminta input ulang dan menampilkan informasi bahwa `Ctrl+D` digunakan untuk menyelesaikan input.
 

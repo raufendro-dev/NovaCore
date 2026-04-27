@@ -21,13 +21,25 @@ type View struct {
 	PluralPath string
 	Public     bool
 	Fields     []Field
+	Methods    []EndpointMethod
+	HasGET     bool
+	HasPOST    bool
+	HasPUT     bool
+	HasPATCH   bool
+	HasDELETE  bool
 	NeedsTime  bool
 	FirstField *Field
 }
 
 type Options struct {
-	Public bool
-	Fields []Field
+	Public  bool
+	Fields  []Field
+	Methods []string
+}
+
+type EndpointMethod struct {
+	Method string
+	Path   string
 }
 
 type Field struct {
@@ -54,6 +66,12 @@ func GenerateWithOptions(kind, name string, opts Options) error {
 	v := makeView(name)
 	v.Public = opts.Public
 	v.Fields = normalizeFields(opts.Fields)
+	v.Methods = normalizeMethods(opts.Methods, v.PluralPath)
+	v.HasGET = hasMethod(v.Methods, "GET")
+	v.HasPOST = hasMethod(v.Methods, "POST")
+	v.HasPUT = hasMethod(v.Methods, "PUT")
+	v.HasPATCH = hasMethod(v.Methods, "PATCH")
+	v.HasDELETE = hasMethod(v.Methods, "DELETE")
 	v.NeedsTime = needsTime(v.Fields)
 	if len(v.Fields) > 0 {
 		v.FirstField = &v.Fields[0]
@@ -210,6 +228,66 @@ func normalizeFields(fields []Field) []Field {
 	return out
 }
 
+func NormalizeMethodNames(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, nil
+	}
+	allowed := map[string]struct{}{"GET": {}, "POST": {}, "PUT": {}, "PATCH": {}, "DELETE": {}}
+	seen := map[string]struct{}{}
+	out := []string{}
+	for _, value := range values {
+		method := strings.ToUpper(strings.TrimSpace(value))
+		if method == "" {
+			continue
+		}
+		if _, ok := allowed[method]; !ok {
+			return nil, fmt.Errorf("unsupported method %q", method)
+		}
+		if _, ok := seen[method]; ok {
+			continue
+		}
+		seen[method] = struct{}{}
+		out = append(out, method)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("at least one method is required")
+	}
+	return out, nil
+}
+
+func normalizeMethods(values []string, pluralPath string) []EndpointMethod {
+	names, err := NormalizeMethodNames(values)
+	if err != nil {
+		names = []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
+	}
+	out := []EndpointMethod{}
+	for _, name := range names {
+		switch name {
+		case "GET":
+			out = append(out, EndpointMethod{Method: "GET", Path: pluralPath})
+			out = append(out, EndpointMethod{Method: "GET", Path: pluralPath + "/:id"})
+		case "POST":
+			out = append(out, EndpointMethod{Method: "POST", Path: pluralPath})
+		case "PUT":
+			out = append(out, EndpointMethod{Method: "PUT", Path: pluralPath + "/:id"})
+		case "PATCH":
+			out = append(out, EndpointMethod{Method: "PATCH", Path: pluralPath + "/:id"})
+		case "DELETE":
+			out = append(out, EndpointMethod{Method: "DELETE", Path: pluralPath + "/:id"})
+		}
+	}
+	return out
+}
+
+func hasMethod(methods []EndpointMethod, method string) bool {
+	for _, item := range methods {
+		if item.Method == method {
+			return true
+		}
+	}
+	return false
+}
+
 func mapFieldType(dataType string) (string, string, string, string, string, error) {
 	switch strings.ToLower(strings.TrimSpace(dataType)) {
 	case "string", "":
@@ -341,8 +419,16 @@ func generatedModules() ([]string, error) {
 
 func writeEndpointDoc(v View) error {
 	path := filepath.Join("docs", "endpoints_"+v.Snake+".md")
-	body := fmt.Sprintf("# %s Endpoints\n\nBase path: `/api/v1/%s`\n\n- `GET /api/v1/%s`\n- `GET /api/v1/%s/:id`\n- `POST /api/v1/%s`\n- `PUT /api/v1/%s/:id`\n- `PATCH /api/v1/%s/:id`\n- `DELETE /api/v1/%s/:id`\n\n## Fields\n\n%s", v.Name, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, v.PluralPath, fieldDocs(v))
+	body := fmt.Sprintf("# %s Endpoints\n\nBase path: `/api/v1/%s`\n\n%s\n## Fields\n\n%s", v.Name, v.PluralPath, endpointDocs(v), fieldDocs(v))
 	return os.WriteFile(path, []byte(body), 0o644)
+}
+
+func endpointDocs(v View) string {
+	var builder strings.Builder
+	for _, method := range v.Methods {
+		builder.WriteString(fmt.Sprintf("- `%s /api/v1/%s`\n", method.Method, method.Path))
+	}
+	return builder.String()
 }
 
 func fieldDocs(v View) string {
@@ -412,16 +498,14 @@ func authFolder() map[string]any {
 }
 
 func moduleFolder(v View) map[string]any {
-	methods := []string{"GET", "GET", "POST", "PUT", "PATCH", "DELETE"}
-	paths := []string{v.PluralPath, v.PluralPath + "/:id", v.PluralPath, v.PluralPath + "/:id", v.PluralPath + "/:id", v.PluralPath + "/:id"}
-	items := make([]any, 0, len(methods))
-	for i, method := range methods {
+	items := make([]any, 0, len(v.Methods))
+	for _, method := range v.Methods {
 		items = append(items, map[string]any{
-			"name": method + " /" + paths[i],
+			"name": method.Method + " /" + method.Path,
 			"request": map[string]any{
-				"method": method,
+				"method": method.Method,
 				"header": []any{map[string]any{"key": "Authorization", "value": "Bearer {{token}}"}, map[string]any{"key": "Content-Type", "value": "application/json"}},
-				"url":    map[string]any{"raw": "{{base_url}}/" + paths[i], "host": []string{"{{base_url}}"}, "path": strings.Split(paths[i], "/")},
+				"url":    map[string]any{"raw": "{{base_url}}/" + method.Path, "host": []string{"{{base_url}}"}, "path": strings.Split(method.Path, "/")},
 				"body":   map[string]any{"mode": "raw", "raw": bodyExample(v)},
 			},
 			"response": []any{map[string]any{"name": "Success", "body": `{"success":true,"message":"OK","data":{}}`}},

@@ -229,12 +229,22 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, jwt *security.JWTManag
 {{else}}
 	group := router.Group("/{{.PluralPath}}", middleware.Auth(jwt))
 {{end}}
+{{if .HasGET}}
 	group.GET("", handler.Index)
 	group.GET("/:id", handler.Show)
+{{end}}
+{{if .HasPOST}}
 	group.POST("", handler.Store)
+{{end}}
+{{if .HasPUT}}
 	group.PUT("/:id", handler.Update)
+{{end}}
+{{if .HasPATCH}}
 	group.PATCH("/:id", handler.Update)
+{{end}}
+{{if .HasDELETE}}
 	group.DELETE("/:id", handler.Destroy)
+{{end}}
 }
 `
 

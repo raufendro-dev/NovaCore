@@ -76,11 +76,16 @@ func colonMakeCommands() []*cobra.Command {
 			Short: "Generate " + kind,
 			Args:  cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				fields, err := promptFields(cmd, kind)
+				reader := bufio.NewReader(cmd.InOrStdin())
+				methods, err := promptMethods(reader, cmd, kind)
 				if err != nil {
 					return err
 				}
-				return generator.GenerateWithOptions(kind, args[0], generator.Options{Public: public, Fields: fields})
+				fields, err := promptFields(reader, cmd, kind)
+				if err != nil {
+					return err
+				}
+				return generator.GenerateWithOptions(kind, args[0], generator.Options{Public: public, Fields: fields, Methods: methods})
 			},
 		}
 		if kind == "crud" || kind == "module" || kind == "endpoint" {
@@ -116,11 +121,16 @@ func makeCommand() *cobra.Command {
 			Short: "Generate " + kind,
 			Args:  cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				fields, err := promptFields(cmd, kind)
+				reader := bufio.NewReader(cmd.InOrStdin())
+				methods, err := promptMethods(reader, cmd, kind)
 				if err != nil {
 					return err
 				}
-				return generator.GenerateWithOptions(kind, args[0], generator.Options{Public: public, Fields: fields})
+				fields, err := promptFields(reader, cmd, kind)
+				if err != nil {
+					return err
+				}
+				return generator.GenerateWithOptions(kind, args[0], generator.Options{Public: public, Fields: fields, Methods: methods})
 			},
 		}
 		if kind == "crud" || kind == "module" || kind == "endpoint" {
@@ -154,11 +164,34 @@ func makeCommand() *cobra.Command {
 	return make
 }
 
-func promptFields(cmd *cobra.Command, kind string) ([]generator.Field, error) {
+func promptMethods(reader *bufio.Reader, cmd *cobra.Command, kind string) ([]string, error) {
 	if kind != "crud" && kind != "module" {
 		return nil, nil
 	}
-	reader := bufio.NewReader(cmd.InOrStdin())
+	for {
+		fmt.Fprintln(cmd.OutOrStdout(), "Choose endpoint methods to generate. Use comma-separated values.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Supported methods: GET, POST, PUT, PATCH, DELETE.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Example: POST, GET, DELETE")
+		value, err := ask(reader, cmd, "Methods [GET, POST, PUT, PATCH, DELETE]")
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(value) == "" {
+			value = "GET, POST, PUT, PATCH, DELETE"
+		}
+		methods, err := generator.NormalizeMethodNames(strings.Split(value, ","))
+		if err != nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "Invalid methods: %v\n", err)
+			continue
+		}
+		return methods, nil
+	}
+}
+
+func promptFields(reader *bufio.Reader, cmd *cobra.Command, kind string) ([]generator.Field, error) {
+	if kind != "crud" && kind != "module" {
+		return nil, nil
+	}
 	fmt.Fprintln(cmd.OutOrStdout(), "Define fields for this CRUD. Default fields are already included: id, created_at, updated_at, deleted_at.")
 	fmt.Fprintln(cmd.OutOrStdout(), "Supported types: string, text, int, uint, float, bool, time.")
 	fmt.Fprintln(cmd.OutOrStdout(), "Press Ctrl+D on field name when finished.")
