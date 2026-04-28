@@ -10,6 +10,19 @@ Base path: `/api/v1/auth`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/auth/me`
 
+Contoh register:
+
+```json
+{
+  "name": "Demo User",
+  "email": "demo@example.com",
+  "password": "password123",
+  "role": "user"
+}
+```
+
+`role` optional. Jika kosong, default-nya adalah `user`.
+
 Gunakan `access_token` dari login atau register untuk endpoint yang membutuhkan auth:
 
 ```http

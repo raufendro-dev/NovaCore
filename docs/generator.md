@@ -16,6 +16,8 @@ novacore make:seeder create_admin_user
 novacore setup
 novacore version
 novacore update
+novacore upgrade
+novacore upgrade auth-role
 novacore uninstall
 ```
 
@@ -23,7 +25,7 @@ novacore uninstall
 
 `make:crud` membuat model, DTO, repository, service, handler, routes, migration, test, docs endpoint, dan Postman request.
 
-`setup` mengambil `pwd` sebagai `NOVACORE_HOME` dan menambahkan Go bin ke `PATH` user. `version` menampilkan versi CLI dan informasi author. `update` mencari root project NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`. Pencarian root otomatis membaca folder umum seperti `~/Developer`, `~/Projects`, dan `$(go env GOPATH)/src`; untuk lokasi lain gunakan `NOVACORE_HOME`. `uninstall` menghapus binary `novacore` yang sedang dijalankan, dan akan menolak jika dipanggil lewat `go run`.
+`setup` mengambil `pwd` sebagai `NOVACORE_HOME` dan menambahkan Go bin ke `PATH` user. `version` menampilkan versi CLI dan informasi author. `update` mencari root repository NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`. `upgrade` melakukan patch aman ke project aplikasi user, misalnya `upgrade auth-role` untuk menambahkan role ke auth lama tanpa overwrite seluruh project. `uninstall` menghapus binary `novacore` yang sedang dijalankan, dan akan menolak jika dipanggil lewat `go run`.
 
 Saat menjalankan `make:crud`, CLI akan menanyakan metode endpoint yang ingin dibuat, lalu field yang ingin disimpan. Field default `id`, `created_at`, `updated_at`, dan `deleted_at` sudah disediakan otomatis oleh `gorm.Model`. Tekan `Ctrl+D` pada prompt `Field name` untuk selesai.
 

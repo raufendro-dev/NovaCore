@@ -2,6 +2,8 @@ package auth
 
 import (
 	"errors"
+	"strings"
+	"unicode"
 
 	"github.com/raufendro/novacore/pkg/security"
 )
@@ -27,7 +29,11 @@ func (s *Service) Register(req RegisterRequest) (*AuthResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	user := &User{Name: req.Name, Email: req.Email, PasswordHash: hash, Role: "user"}
+	role, err := normalizeRole(req.Role)
+	if err != nil {
+		return nil, err
+	}
+	user := &User{Name: req.Name, Email: req.Email, PasswordHash: hash, Role: role}
 	if err := s.repo.Create(user); err != nil {
 		return nil, err
 	}
@@ -70,4 +76,18 @@ func (s *Service) tokens(user *User) (*AuthResponse, error) {
 		return nil, err
 	}
 	return &AuthResponse{User: *user, AccessToken: access, RefreshToken: refresh}, nil
+}
+
+func normalizeRole(role string) (string, error) {
+	role = strings.ToLower(strings.TrimSpace(role))
+	if role == "" {
+		return "user", nil
+	}
+	for _, r := range role {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-' {
+			continue
+		}
+		return "", errors.New("role may only contain letters, numbers, underscore, or dash")
+	}
+	return role, nil
 }

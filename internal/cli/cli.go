@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/raufendro/novacore/internal/app"
@@ -22,9 +23,10 @@ import (
 	"golang.org/x/term"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 const author = "Rauf Endro Widagdo aka raufendro"
 const novaCoreModule = "github.com/raufendro/novacore"
+const novaCoreRepository = "github.com/raufendro-dev/NovaCore"
 
 func Execute() {
 	root := &cobra.Command{Use: "novacore", Short: "NovaCore backend framework CLI", SilenceUsage: true}
@@ -36,6 +38,7 @@ func Execute() {
 	root.AddCommand(uninstallCommand())
 	root.AddCommand(setupCommand())
 	root.AddCommand(createCommand())
+	root.AddCommand(upgradeCommand())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Show NovaCore version",
@@ -45,7 +48,7 @@ func Execute() {
 			fmt.Fprintf(out, "Version     : %s\n", version)
 			fmt.Fprintf(out, "Framework   : Production-ready Go REST API framework\n")
 			fmt.Fprintf(out, "Author      : %s\n", author)
-			fmt.Fprintf(out, "Repository  : %s\n", novaCoreModule)
+			fmt.Fprintf(out, "Repository  : %s\n", novaCoreRepository)
 			fmt.Fprintf(out, "License     : MIT\n")
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "Terima kasih sudah menggunakan NovaCore.")
@@ -394,6 +397,277 @@ func createCommand() *cobra.Command {
 	}
 	command.Flags().StringVar(&modulePath, "module", "", "Go module path for the new project")
 	return command
+}
+
+func upgradeCommand() *cobra.Command {
+	checkOnly := false
+	command := &cobra.Command{
+		Use:   "upgrade [target]",
+		Short: "Safely upgrade an existing NovaCore application project",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			target := "auth-role"
+			if len(args) == 1 {
+				target = strings.TrimSpace(args[0])
+			}
+			switch target {
+			case "", "auth-role":
+				return upgradeAuthRole(cmd, checkOnly)
+			default:
+				return fmt.Errorf("unknown upgrade target %q; available target: auth-role", target)
+			}
+		},
+	}
+	command.Flags().BoolVar(&checkOnly, "check", false, "check upgrade status without changing files")
+	return command
+}
+
+func upgradeAuthRole(cmd *cobra.Command, checkOnly bool) error {
+	root, err := findApplicationRoot()
+	if err != nil {
+		return err
+	}
+	files := authUpgradeFiles(root)
+	for _, file := range files {
+		if _, err := os.Stat(file); err != nil {
+			return fmt.Errorf("auth upgrade needs %s: %w", file, err)
+		}
+	}
+
+	changes, err := authRoleUpgradeChanges(root)
+	if err != nil {
+		return err
+	}
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "NovaCore app project : %s\n", root)
+	if len(changes) == 0 {
+		fmt.Fprintln(out, "Auth role upgrade already applied.")
+		return nil
+	}
+
+	fmt.Fprintln(out, "Planned changes:")
+	for _, change := range changes {
+		fmt.Fprintf(out, "  - %s\n", change.Description)
+	}
+	if checkOnly {
+		fmt.Fprintln(out, "Check only. No files changed.")
+		return nil
+	}
+
+	backupDir := filepath.Join(root, ".novacore", "backups", time.Now().Format("20060102_150405")+"_auth_role")
+	if err := backupFiles(root, backupDir, files); err != nil {
+		return err
+	}
+	for _, change := range changes {
+		if err := os.WriteFile(change.Path, []byte(change.Content), 0o644); err != nil {
+			return err
+		}
+	}
+	if err := writeAuthRoleMigrationNote(root); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(out, "Backup created at: %s\n", backupDir)
+	fmt.Fprintln(out, "Auth role upgrade completed.")
+	fmt.Fprintln(out, "Run: gofmt -w internal/modules/auth && go test ./...")
+	return nil
+}
+
+type fileChange struct {
+	Path        string
+	Content     string
+	Description string
+}
+
+func findApplicationRoot() (string, error) {
+	if root, err := gitRoot(); err == nil && hasGoMod(root) {
+		return root, nil
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		if hasGoMod(dir) {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return "", fmt.Errorf("cannot find Go project root; run novacore upgrade inside your application project")
+}
+
+func gitRoot() (string, error) {
+	gitCmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	output, err := gitCmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func hasGoMod(root string) bool {
+	stat, err := os.Stat(filepath.Join(root, "go.mod"))
+	return err == nil && !stat.IsDir()
+}
+
+func authUpgradeFiles(root string) []string {
+	return []string{
+		filepath.Join(root, "internal", "modules", "auth", "model.go"),
+		filepath.Join(root, "internal", "modules", "auth", "dto.go"),
+		filepath.Join(root, "internal", "modules", "auth", "service.go"),
+	}
+}
+
+func authRoleUpgradeChanges(root string) ([]fileChange, error) {
+	changes := make([]fileChange, 0)
+
+	modelPath := filepath.Join(root, "internal", "modules", "auth", "model.go")
+	model, err := readTextFile(modelPath)
+	if err != nil {
+		return nil, err
+	}
+	nextModel := patchAuthModel(model)
+	if nextModel != model {
+		changes = append(changes, fileChange{Path: modelPath, Content: nextModel, Description: "add role column and Roles helper to auth user model"})
+	}
+
+	dtoPath := filepath.Join(root, "internal", "modules", "auth", "dto.go")
+	dto, err := readTextFile(dtoPath)
+	if err != nil {
+		return nil, err
+	}
+	nextDTO := patchAuthDTO(dto)
+	if nextDTO != dto {
+		changes = append(changes, fileChange{Path: dtoPath, Content: nextDTO, Description: "add optional role parameter to register request"})
+	}
+
+	servicePath := filepath.Join(root, "internal", "modules", "auth", "service.go")
+	service, err := readTextFile(servicePath)
+	if err != nil {
+		return nil, err
+	}
+	nextService := patchAuthService(service)
+	if nextService != service {
+		changes = append(changes, fileChange{Path: servicePath, Content: nextService, Description: "normalize role during register and keep default role as user"})
+	}
+
+	return changes, nil
+}
+
+func readTextFile(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
+}
+
+func patchAuthModel(content string) string {
+	if !strings.Contains(content, "Role         string") {
+		content = strings.Replace(content,
+			"\tPasswordHash string `json:\"-\" gorm:\"not null\"`\n",
+			"\tPasswordHash string `json:\"-\" gorm:\"not null\"`\n\tRole         string `json:\"role\" gorm:\"size:40;not null;default:user\"`\n",
+			1,
+		)
+	}
+	if !strings.Contains(content, "func (u User) Roles() []string") {
+		content += "\nfunc (u User) Roles() []string {\n\tif u.Role == \"\" {\n\t\treturn []string{\"user\"}\n\t}\n\treturn []string{u.Role}\n}\n"
+	}
+	return content
+}
+
+func patchAuthDTO(content string) string {
+	if strings.Contains(content, "Role     string `json:\"role\"") {
+		return content
+	}
+	return strings.Replace(content,
+		"\tPassword string `json:\"password\" validate:\"required,min=8\"`\n",
+		"\tPassword string `json:\"password\" validate:\"required,min=8\"`\n\tRole     string `json:\"role\" validate:\"omitempty,min=2,max=40\"`\n",
+		1,
+	)
+}
+
+func patchAuthService(content string) string {
+	content = ensureAuthServiceImport(content, "strings")
+	content = ensureAuthServiceImport(content, "unicode")
+	if !strings.Contains(content, "normalizeRole(req.Role)") {
+		content = strings.Replace(content,
+			"\tuser := &User{Name: req.Name, Email: req.Email, PasswordHash: hash, Role: \"user\"}\n",
+			"\trole, err := normalizeRole(req.Role)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tuser := &User{Name: req.Name, Email: req.Email, PasswordHash: hash, Role: role}\n",
+			1,
+		)
+		content = strings.Replace(content,
+			"\tuser := &User{Name: req.Name, Email: req.Email, PasswordHash: hash}\n",
+			"\trole, err := normalizeRole(req.Role)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tuser := &User{Name: req.Name, Email: req.Email, PasswordHash: hash, Role: role}\n",
+			1,
+		)
+	}
+	if !strings.Contains(content, "func normalizeRole(role string) (string, error)") {
+		content += "\nfunc normalizeRole(role string) (string, error) {\n\trole = strings.ToLower(strings.TrimSpace(role))\n\tif role == \"\" {\n\t\treturn \"user\", nil\n\t}\n\tfor _, r := range role {\n\t\tif unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-' {\n\t\t\tcontinue\n\t\t}\n\t\treturn \"\", errors.New(\"role may only contain letters, numbers, underscore, or dash\")\n\t}\n\treturn role, nil\n}\n"
+	}
+	return content
+}
+
+func ensureAuthServiceImport(content, importName string) string {
+	quoted := "\"" + importName + "\""
+	if strings.Contains(content, quoted) {
+		return content
+	}
+	return strings.Replace(content, "import (\n", "import (\n\t"+quoted+"\n", 1)
+}
+
+func backupFiles(root, backupDir string, files []string) error {
+	for _, file := range files {
+		rel, err := filepath.Rel(root, file)
+		if err != nil {
+			return err
+		}
+		content, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(backupDir, rel)
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, content, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeAuthRoleMigrationNote(root string) error {
+	migrationDir := filepath.Join(root, "migrations")
+	if err := os.MkdirAll(migrationDir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(migrationDir, time.Now().Format("20060102150405")+"_add_role_to_users.manual.sql")
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	sql := `-- Safe auth upgrade note.
+-- NovaCore auth uses GORM AutoMigrate, so the role column is added automatically
+-- when the server starts with the upgraded auth.User model.
+--
+-- If your production database is managed only by SQL migrations, adapt one of
+-- these statements for your database and rename this file to *.up.sql.
+--
+-- PostgreSQL:
+-- ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(40) NOT NULL DEFAULT 'user';
+--
+-- MySQL 8.0.29+:
+-- ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(40) NOT NULL DEFAULT 'user';
+--
+-- SQLite does not support ADD COLUMN IF NOT EXISTS. Check the schema first,
+-- then run this only if the role column does not exist:
+-- ALTER TABLE users ADD COLUMN role VARCHAR(40) NOT NULL DEFAULT 'user';
+`
+	return os.WriteFile(path, []byte(sql), 0o644)
 }
 
 func validateProjectName(name string) error {

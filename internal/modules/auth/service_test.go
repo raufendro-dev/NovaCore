@@ -38,9 +38,12 @@ func (m *memoryRepo) FindByID(id uint) (*User, error) {
 
 func TestRegisterAndLogin(t *testing.T) {
 	service := NewService(&memoryRepo{}, testJWT())
-	_, err := service.Register(RegisterRequest{Name: "Demo", Email: "demo@example.com", Password: "password123"})
+	registered, err := service.Register(RegisterRequest{Name: "Demo", Email: "demo@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if registered.User.Role != "user" {
+		t.Fatalf("expected default role user, got %s", registered.User.Role)
 	}
 	resp, err := service.Login(LoginRequest{Email: "demo@example.com", Password: "password123"})
 	if err != nil {
@@ -48,6 +51,25 @@ func TestRegisterAndLogin(t *testing.T) {
 	}
 	if resp.AccessToken == "" || resp.RefreshToken == "" {
 		t.Fatal("expected token pair")
+	}
+}
+
+func TestRegisterWithRole(t *testing.T) {
+	service := NewService(&memoryRepo{}, testJWT())
+	resp, err := service.Register(RegisterRequest{Name: "Admin", Email: "admin@example.com", Password: "password123", Role: "Admin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.User.Role != "admin" {
+		t.Fatalf("expected normalized role admin, got %s", resp.User.Role)
+	}
+}
+
+func TestRegisterRejectsInvalidRole(t *testing.T) {
+	service := NewService(&memoryRepo{}, testJWT())
+	_, err := service.Register(RegisterRequest{Name: "Demo", Email: "demo@example.com", Password: "password123", Role: "super admin"})
+	if err == nil {
+		t.Fatal("expected invalid role error")
 	}
 }
 

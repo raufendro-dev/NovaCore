@@ -62,7 +62,7 @@ Update framework dari repository Git:
 novacore update
 ```
 
-Command ini mencari root project NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`. Command ini bisa dijalankan dari folder repository atau dari direktori lain seperti `~`.
+Command ini mencari root repository NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`. Command ini memperbarui source framework/CLI, bukan menimpa project aplikasi user yang sudah banyak custom code.
 
 NovaCore akan otomatis mencari clone project di folder umum seperti `~/Developer`, `~/Projects`, `~/Project`, `~/Code`, dan `$(go env GOPATH)/src`.
 
@@ -79,6 +79,19 @@ Jika project berada di lokasi lain, set `NOVACORE_HOME`:
 echo 'export NOVACORE_HOME="/path/to/novacore"' >> ~/.zshrc
 source ~/.zshrc
 novacore update
+```
+
+Upgrade project aplikasi user:
+
+```bash
+novacore upgrade
+novacore upgrade auth-role
+```
+
+`novacore upgrade` dijalankan di dalam project aplikasi yang dibuat dari NovaCore. Command ini melakukan patch aman dan membuat backup di `.novacore/backups/` sebelum mengubah file. Untuk `auth-role`, NovaCore juga membuat catatan SQL manual di `migrations/` bagi production database yang tidak memakai AutoMigrate. Untuk cek tanpa mengubah file:
+
+```bash
+novacore upgrade auth-role --check
 ```
 
 Uninstall CLI:

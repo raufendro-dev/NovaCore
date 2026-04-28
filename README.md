@@ -133,10 +133,10 @@ Output versi:
 
 ```text
 NovaCore CLI
-Version     : 0.1.0
+Version     : 0.2.0
 Framework   : Production-ready Go REST API framework
 Author      : Rauf Endro Widagdo aka raufendro
-Repository  : github.com/raufendro/novacore
+Repository  : github.com/raufendro-dev/NovaCore
 License     : MIT
 ```
 
@@ -168,7 +168,9 @@ Update project framework dari repository Git:
 novacore update
 ```
 
-`novacore update` akan mencari folder root project NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`. Command ini bisa dijalankan dari folder repository atau dari direktori lain seperti `~`.
+`novacore update` dipakai untuk memperbarui source framework/CLI NovaCore. Command ini mencari folder root repository NovaCore, menjalankan `git pull`, menghapus binary CLI lama, lalu menjalankan ulang `go install ./cmd/novacore`.
+
+`novacore update` tidak dirancang untuk menimpa project aplikasi user yang sudah banyak custom code.
 
 NovaCore akan otomatis mencari clone project di folder umum seperti `~/Developer`, `~/Projects`, `~/Project`, `~/Code`, dan `$(go env GOPATH)/src`.
 
@@ -185,6 +187,34 @@ Jika project berada di lokasi lain, set lokasi project dengan `NOVACORE_HOME`:
 echo 'export NOVACORE_HOME="/path/to/novacore"' >> ~/.zshrc
 source ~/.zshrc
 novacore update
+```
+
+Upgrade project aplikasi user secara aman:
+
+```bash
+novacore upgrade
+```
+
+`novacore upgrade` dipakai di dalam project aplikasi yang dibuat dari NovaCore. Command ini melakukan patch bertahap dan aman ke file yang diperlukan, membuat backup terlebih dahulu, dan tidak melakukan overwrite brutal ke seluruh project.
+
+Upgrade auth role:
+
+```bash
+novacore upgrade auth-role
+```
+
+Command ini menambahkan dukungan `role` pada auth user lama:
+
+- menambah field `role` pada model user jika belum ada
+- menambah parameter `role` pada register request jika belum ada
+- menambah normalisasi role di service register
+- membuat backup di `.novacore/backups/`
+- membuat catatan SQL manual di `migrations/*_add_role_to_users.manual.sql` untuk production database yang tidak memakai AutoMigrate
+
+Untuk hanya mengecek tanpa mengubah file:
+
+```bash
+novacore upgrade auth-role --check
 ```
 
 Uninstall binary CLI NovaCore:
@@ -243,6 +273,8 @@ Yang dilakukan oleh `create`:
 | `novacore setup` | Set `NOVACORE_HOME` dari `pwd` dan menambahkan Go bin ke `PATH` |
 | `novacore version` | Menampilkan versi, author, repository, dan license |
 | `novacore update` | Menjalankan `git pull`, uninstall binary lama, lalu install CLI terbaru |
+| `novacore upgrade` | Patch aman untuk project aplikasi user |
+| `novacore upgrade auth-role` | Menambahkan dukungan role ke auth user lama |
 | `novacore uninstall` | Menghapus binary CLI NovaCore |
 | `novacore make:module User` | Generate module |
 | `novacore make:model Product` | Generate model |
@@ -317,8 +349,10 @@ Contoh register:
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"name":"Demo User","email":"demo@example.com","password":"password123"}'
+  -d '{"name":"Demo User","email":"demo@example.com","password":"password123","role":"user"}'
 ```
+
+Field `role` bersifat optional. Jika tidak dikirim, NovaCore otomatis memakai role `user`. Nilai role akan ikut masuk ke JWT claims dan bisa dipakai oleh middleware RBAC seperti `middleware.Role("admin")`.
 
 Contoh login:
 

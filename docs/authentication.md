@@ -2,6 +2,19 @@
 
 Auth bawaan menyediakan register, login, refresh token, logout, current user, validasi token, bcrypt, dan role claim.
 
+User auth memiliki field `role`. Saat register, `role` boleh dikirim sebagai parameter optional:
+
+```json
+{
+  "name": "Demo User",
+  "email": "demo@example.com",
+  "password": "password123",
+  "role": "user"
+}
+```
+
+Jika `role` tidak dikirim, NovaCore otomatis memakai `user`. Role disimpan di tabel `users`, ikut masuk ke JWT claims, dan digunakan oleh middleware RBAC.
+
 Login menghasilkan:
 
 - `access_token`

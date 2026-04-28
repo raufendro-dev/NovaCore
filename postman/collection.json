@@ -20,7 +20,7 @@
             "url": "{{base_url}}/auth/register",
             "body": {
               "mode": "raw",
-              "raw": "{\"name\":\"Demo User\",\"email\":\"demo@example.com\",\"password\":\"password123\"}"
+              "raw": "{\"name\":\"Demo User\",\"email\":\"demo@example.com\",\"password\":\"password123\",\"role\":\"user\"}"
             }
           }
         },
