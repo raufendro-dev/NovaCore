@@ -82,7 +82,9 @@ func Run() error {
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()
-	fmt.Printf("%s running on http://localhost:%s\n", cfg.App.Name, cfg.App.Port)
+	serverURL := fmt.Sprintf("http://localhost:%s", cfg.App.Port)
+	fmt.Printf("%s running on %s\n", cfg.App.Name, serverURL)
+	fmt.Printf("Postman base_url: %s/api/v1\n", serverURL)
 	err = server.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil

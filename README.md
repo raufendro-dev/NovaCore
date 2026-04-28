@@ -269,6 +269,7 @@ Yang dilakukan oleh `create`:
 | Command | Fungsi |
 | --- | --- |
 | `novacore create nama-project` | Membuat project backend baru dari template NovaCore |
+| `novacore check` | Mengecek direktori project aktif, module, `.env`, entrypoint server, dan Postman environment |
 | `novacore run` | Menjalankan HTTP server |
 | `novacore setup` | Set `NOVACORE_HOME` dari `pwd` dan menambahkan Go bin ke `PATH` |
 | `novacore version` | Menampilkan versi, author, repository, dan license |

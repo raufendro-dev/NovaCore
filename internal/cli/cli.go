@@ -13,7 +13,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/raufendro/novacore/internal/app"
 	"github.com/raufendro/novacore/internal/config"
 	"github.com/raufendro/novacore/internal/database"
 	"github.com/raufendro/novacore/internal/generator"
@@ -39,6 +38,7 @@ func Execute() {
 	root.AddCommand(setupCommand())
 	root.AddCommand(createCommand())
 	root.AddCommand(upgradeCommand())
+	root.AddCommand(checkCommand())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Show NovaCore version",
@@ -55,13 +55,7 @@ func Execute() {
 			fmt.Fprintln(out, "Semangat coding dan bangun backend yang rapi, aman, dan mudah dikembangkan.")
 		},
 	})
-	root.AddCommand(&cobra.Command{
-		Use:   "run",
-		Short: "Run NovaCore HTTP server",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return app.Run()
-		},
-	})
+	root.AddCommand(runCommand())
 	root.AddCommand(&cobra.Command{
 		Use:   "migrate",
 		Short: "Run SQL migrations",
@@ -96,6 +90,80 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func runCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "run",
+		Short: "Run NovaCore HTTP server",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := findCurrentGoProjectRoot()
+			if err != nil {
+				return err
+			}
+			serverMain := filepath.Join(root, "cmd", "server", "main.go")
+			if _, err := os.Stat(serverMain); err != nil {
+				return fmt.Errorf("cannot find NovaCore server entrypoint %s: %w", serverMain, err)
+			}
+			return runInDir(cmd, root, "go", "run", "cmd/server/main.go")
+		},
+	}
+}
+
+func checkCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "check",
+		Short: "Check the current NovaCore application directory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return printDirectoryCheck(cmd)
+		},
+	}
+}
+
+func printDirectoryCheck(cmd *cobra.Command) error {
+	out := cmd.OutOrStdout()
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(out, "NovaCore directory check")
+	fmt.Fprintf(out, "Current directory : %s\n", cwd)
+	if home := strings.TrimSpace(os.Getenv("NOVACORE_HOME")); home != "" {
+		fmt.Fprintf(out, "NOVACORE_HOME     : %s\n", home)
+	}
+
+	root, err := findCurrentGoProjectRoot()
+	if err != nil {
+		fmt.Fprintln(out, "Project root      : not found")
+		fmt.Fprintln(out, "Status            : run this command inside a NovaCore application project")
+		return err
+	}
+
+	module, moduleErr := readGoModule(filepath.Join(root, "go.mod"))
+	if moduleErr != nil {
+		module = "unknown"
+	}
+	serverMain := filepath.Join(root, "cmd", "server", "main.go")
+	envFile := filepath.Join(root, ".env")
+	envExample := filepath.Join(root, ".env.example")
+	postmanEnv := filepath.Join(root, "postman", "environment.json")
+	databaseDir := filepath.Join(root, "database")
+
+	fmt.Fprintf(out, "Project root      : %s\n", root)
+	fmt.Fprintf(out, "Go module         : %s\n", module)
+	fmt.Fprintf(out, "Server entrypoint : %s\n", pathStatus(serverMain))
+	fmt.Fprintf(out, "Environment file  : %s\n", pathStatus(envFile))
+	fmt.Fprintf(out, "Env example       : %s\n", pathStatus(envExample))
+	fmt.Fprintf(out, "Postman env       : %s\n", pathStatus(postmanEnv))
+	fmt.Fprintf(out, "Database dir      : %s\n", pathStatus(databaseDir))
+	fmt.Fprintf(out, "Run command       : cd %s && novacore run\n", root)
+	fmt.Fprintln(out, "Postman base_url  : printed by novacore run")
+
+	if !pathExists(serverMain) {
+		return fmt.Errorf("directory check failed: missing %s", serverMain)
+	}
+	return nil
 }
 
 func updateCommand() *cobra.Command {
@@ -480,9 +548,10 @@ type fileChange struct {
 }
 
 func findApplicationRoot() (string, error) {
-	if root, err := gitRoot(); err == nil && hasGoMod(root) {
-		return root, nil
-	}
+	return findCurrentGoProjectRoot()
+}
+
+func findCurrentGoProjectRoot() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -497,7 +566,39 @@ func findApplicationRoot() (string, error) {
 		}
 		dir = parent
 	}
-	return "", fmt.Errorf("cannot find Go project root; run novacore upgrade inside your application project")
+	if root, err := gitRoot(); err == nil && hasGoMod(root) {
+		return root, nil
+	}
+	return "", fmt.Errorf("cannot find Go project root; run this command inside your application project")
+}
+
+func readGoModule(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "module ") {
+			module := strings.TrimSpace(strings.TrimPrefix(line, "module "))
+			if module != "" {
+				return module, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("module declaration not found in %s", path)
+}
+
+func pathStatus(path string) string {
+	if pathExists(path) {
+		return path + " (found)"
+	}
+	return path + " (missing)"
+}
+
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func gitRoot() (string, error) {

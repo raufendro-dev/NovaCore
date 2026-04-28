@@ -4,6 +4,7 @@ Command:
 
 ```bash
 novacore create nama-project
+novacore check
 novacore make:module User
 novacore make:model Product
 novacore make:controller Product
@@ -21,7 +22,7 @@ novacore upgrade auth-role
 novacore uninstall
 ```
 
-`create` membuat project baru dari template NovaCore di direktori aktif. Default module Go diambil dari nama folder project, dan bisa diubah dengan `--module`.
+`create` membuat project baru dari template NovaCore di direktori aktif. Default module Go diambil dari nama folder project, dan bisa diubah dengan `--module`. `check` mengecek direktori project aktif, module Go, file `.env`, entrypoint server, dan Postman environment yang ditemukan.
 
 `make:crud` membuat model, DTO, repository, service, handler, routes, migration, test, docs endpoint, dan Postman request.
 

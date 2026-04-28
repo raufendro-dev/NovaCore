@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -26,6 +29,92 @@ func TestPatchAuthModelAddsRole(t *testing.T) {
 	got := patchAuthModel(input)
 	if !containsAll(got, "Role         string `json:\"role\" gorm:\"size:40;not null;default:user\"`", "func (u User) Roles() []string") {
 		t.Fatalf("expected auth model role patch, got:\n%s", got)
+	}
+}
+
+func TestFindCurrentGoProjectRootPrefersNearestGoMod(t *testing.T) {
+	parent := t.TempDir()
+	child := filepath.Join(parent, "apps", "demo")
+	nested := filepath.Join(child, "internal", "modules")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "go.mod"), []byte("module parent\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(child, "go.mod"), []byte("module demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldWD)
+	if err := os.Chdir(nested); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := findCurrentGoProjectRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(child)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("expected nearest Go project root %s, got %s", child, got)
+	}
+}
+
+func TestCheckCommandPrintsCurrentProjectDetails(t *testing.T) {
+	project := t.TempDir()
+	serverDir := filepath.Join(project, "cmd", "server")
+	if err := os.MkdirAll(serverDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		filepath.Join(project, "go.mod"):       "module demo\n",
+		filepath.Join(serverDir, "main.go"):    "package main\n",
+		filepath.Join(project, ".env"):         "APP_PORT=8080\n",
+		filepath.Join(project, ".env.example"): "APP_PORT=8080\n",
+	}
+	if err := os.MkdirAll(filepath.Join(project, "postman"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for path, content := range files {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(project, "postman", "environment.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldWD)
+	if err := os.Chdir(project); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	cmd := checkCommand()
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	wantProject, err := filepath.EvalSymlinks(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsAll(got, "NovaCore directory check", "Project root", wantProject, "Go module         : demo", "Server entrypoint", "(found)", "Run command") {
+		t.Fatalf("unexpected check output:\n%s", got)
 	}
 }
 
